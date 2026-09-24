@@ -1,0 +1,1166 @@
+
+        const { useState, useEffect, useCallback } = React;
+
+        const VOCAB_DATA = [
+            { id: "1.1", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.1", moduleTitle: "Agentic Loops", term: "Autonomous Execution Loop", phonetic: "/ɔːˈtɒn.ə.məs ˌek.sɪˈkjuː.ʃən luːp/", ptTranslation: "Ciclo de Execução Autônomo", definition: "A controlled control-flow loop where the model receives tool execution outputs and iteratively decides the next action until completing a task.", example: "The agentic loop continues executing bash commands until all unit tests pass or the max_iterations safeguard triggers.", keyContext: "Exams test how loop state is passed and how stop conditions prevent infinite execution loops." },
+            { id: "1.2", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.2", moduleTitle: "Multi-Agent Orchestration", term: "Orchestration Topologies", phonetic: "/ˌɔː.kɪˈstreɪ.ʃən tɒˈpɒl.ə.dʒiz/", ptTranslation: "Topologias de Orquestração", definition: "Architectural patterns defining how task delegation occurs—either centralized by an orchestrator/router or decentralized across peer agents.", example: "A Router architecture evaluates incoming requests and forwards them to specialized domain agents.", keyContext: "Understanding when to use central routing versus peer handoffs." },
+            { id: "1.3", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.3", moduleTitle: "Subagent Invocation", term: "Subagent Context Isolation", phonetic: "/ˈsʌb.eɪ.dʒənt ˈkɒn.tekst ˌaɪ.səˈleɪ.ʃən/", ptTranslation: "Isolamento de Contexto de Subagente", definition: "Spawning subagents with scoped, minimal prompt histories to prevent token bloat and context contamination.", example: "By delegating code linting to an isolated subagent, the parent orchestrator avoids consuming 30,000 tokens of raw file logs.", keyContext: "Subagents should receive only explicit inputs and return summarized outputs." },
+            { id: "1.4", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.4", moduleTitle: "Workflow Enforcement", term: "Handoff State Payload", phonetic: "/ˈhænd.ɒf steɪt ˈpeɪ.ləʊd/", ptTranslation: "Carga Útil de Estado de Transição", definition: "Structured state transferred sequentially from one specialized agent to another during workflow transitions.", example: "The workflow enforcement layer validated the handoff payload before passing execution from reviewer to deployment agent.", keyContext: "Prevents loss of progress or critical metadata across state boundaries." },
+            { id: "1.5", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.5", moduleTitle: "Agent SDK Hooks", term: "Event Hooks (Pre/Post Hooks)", phonetic: "/ɪˈvent hʊks/", ptTranslation: "Ganchos de Evento de Ciclo de Vida", definition: "Programmatic interceptors triggered before or after tool invocations or API requests to enforce policy or transform data.", example: "A pre-tool-call hook intercepts SQL write operations to enforce safety checks.", keyContext: "Used for auditing, authorization, and modifying input/output payloads in the Agent SDK." },
+            { id: "1.6", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.6", moduleTitle: "Task Decomposition", term: "Attention Dilution", phonetic: "/əˈten.ʃən daɪˈluː.ʃən/", ptTranslation: "Diluição de Atenção", definition: "Degradation in accuracy that occurs when an agent attempts to execute too many complex steps or process vast files in a single pass.", example: "Breaking the refactoring plan into 5 discrete sub-tasks mitigated severe attention dilution.", keyContext: "Crucial exam trap: Shallow decomposition causes degraded output on later steps." },
+            { id: "1.7", domainId: "d1", domainName: "01. Architecture (27%)", moduleNum: "1.7", moduleTitle: "Session State & Resumption", term: "Checkpoint Resumption State", phonetic: "/ˈtʃek.pɔɪnt rɪˈzʌmp.ʃən steɪt/", ptTranslation: "Estado de Retomada por Ponto de Controle", definition: "Persisting intermediate conversation state and tool call results to allow long-running agent workflows to recover from network crashes.", example: "The session state layer saved a checkpoint after each step, enabling instant resumption without re-running past tools.", keyContext: "Ensures durability and fault tolerance in multi-turn server environments." },
+
+            { id: "2.1", domainId: "d2", domainName: "02. Tools & MCP (18%)", moduleNum: "2.1", moduleTitle: "Tool Interface Design", term: "Tool Schema Parameter Strictness", phonetic: "/tuːl ˈskiː.mə pəˈræm.ɪ.tər strɪkt.nəs/", ptTranslation: "Rigor nos Parâmetros do Esquema", definition: "Designing explicit JSON Schemas with descriptive parameter descriptions and precise types to eliminate ambiguous tool calls.", example: "Adding clear enum constraints to the tool schema reduced invalid arguments by 95%.", keyContext: "Claude relies heavily on field description strings inside the JSON Schema to understand parameters." },
+            { id: "2.2", domainId: "d2", domainName: "02. Tools & MCP (18%)", moduleNum: "2.2", moduleTitle: "Structured Error Responses", term: "Informative Tool Error Payload", phonetic: "/ɪnˈfɔː.mə.tɪv tuːl ˈer.ər ˈpeɪ.ləʊd/", ptTranslation: "Payload Informativo de Erro de Ferramenta", definition: "Returning clear, actionable error messages in tool responses so Claude can self-correct arguments in the next loop.", example: "Instead of 'Error 500', the tool returned 'Invalid date format: Expected YYYY-MM-DD', allowing Claude to retry correctly.", keyContext: "Never return raw stack traces without context; explain what went wrong and how to fix it." },
+            { id: "2.3", domainId: "d2", domainName: "02. Tools & MCP (18%)", moduleNum: "2.3", moduleTitle: "Tool Distribution & Choice", term: "Tool Choice Configuration", phonetic: "/tuːl tʃɔɪs kənˌfɪɡ.jəˈreɪ.ʃən/", ptTranslation: "Configuração de Seleção de Ferramentas", definition: "Controlling whether Claude decides tool use automatically ('auto'), forces at least one tool call ('any'), or executes a specific tool ('tool').", example: "Setting tool_choice = { type: 'tool', name: 'extract_data' } guarantees structured output execution.", keyContext: "Used to force deterministic schema outputs or allow open model reasoning." },
+            { id: "2.4", domainId: "d2", domainName: "02. Tools & MCP (18%)", moduleNum: "2.4", moduleTitle: "MCP Server Integration", term: "Model Context Protocol Primitives", phonetic: "/ˈmɒd.əl ˈkɒn.tekst ˈprəʊ.tə.kɒl/", ptTranslation: "Componentes MCP (Resources, Tools, Prompts)", definition: "The core primitives of MCP: Resources (data exposure), Tools (executable actions), and Prompts (reusable templates).", example: "The database MCP server exposes table schemas as Resources and execute_query as a Tool.", keyContext: "Central focus of Domain 2: standardizing external integrations." },
+            { id: "2.5", domainId: "d2", domainName: "02. Tools & MCP (18%)", moduleNum: "2.5", moduleTitle: "Built-in Tools", term: "Grep vs Glob Distinction", phonetic: "/ɡrep vɜːsəs ɡlɒb dɪˈstɪŋk.ʃən/", ptTranslation: "Diferença entre Grep e Glob", definition: "Grep searches text INSIDE file contents, while Glob matches file PATHS/NAMES based on wildcards.", example: "Use Glob to find `**/*.test.ts` files, and use Grep to find occurrences of `function processPayment` inside those files.", keyContext: "Guaranteed exam question distinction! Grep = inside files; Glob = file system names." },
+
+            { id: "3.1", domainId: "d3", domainName: "03. Claude Code (20%)", moduleNum: "3.1", moduleTitle: "CLAUDE.md Hierarchy", term: "CLAUDE.md Hierarchy Rules", phonetic: "/ˈhaɪə.rɑː.ki ruːlz/", ptTranslation: "Hierarquia do Arquivo CLAUDE.md", definition: "Configuration files located at project root or subdirectories providing instructions, coding standards, and build commands.", example: "Global instructions reside in root CLAUDE.md, while package-specific rules live in nested directory CLAUDE.md files.", keyContext: "Controls project styling, linting commands, and architecture rules for Claude CLI." },
+            { id: "3.2", domainId: "d3", domainName: "03. Claude Code (20%)", moduleNum: "3.2", moduleTitle: "Custom Commands & Skills", term: "Custom Slash Commands", phonetic: "/ˈkʌs.təm slæʃ kəˈmɑːndz/", ptTranslation: "Comandos Slash Personalizados", definition: "Shortcut commands (e.g., /test, /review) configured to execute predefined prompts and terminal scripts.", example: "Executing /review triggers a custom slash command script that runs static analysis before prompting Claude.", keyContext: "Standardizes repetitive developer tasks inside Claude CLI." },
+            { id: "3.3", domainId: "d3", domainName: "03. Claude Code (20%)", moduleNum: "3.3", moduleTitle: "Permissions & Hooks", term: "Sandbox & Tool Approval Rules", phonetic: "/ˈsænd.bɒks ænd tuːl əˈpruː.vəl/", ptTranslation: "Regras de Sandbox e Aprovação", definition: "Security boundaries configured in settings to dictate which commands execute automatically versus which require human terminal confirmation.", example: "File reading is auto-approved, but bash commands running `rm -rf` trigger explicit permission prompts.", keyContext: "Prevents untrusted or hazardous command execution in local developer setups." },
+            { id: "3.4", domainId: "d3", domainName: "03. Claude Code (20%)", moduleNum: "3.4", moduleTitle: "Plan Mode vs Execution", term: "Plan Mode", phonetic: "/plæn məʊd/", ptTranslation: "Modo Planejamento (Sem Execução)", definition: "A mode where Claude analyzes code and formulates a step-by-step strategy without mutating local files or making tools modifications.", example: "Before performing a multi-file migration, switch to Plan Mode to review architectural impact.", keyContext: "Reduces mistakes by requiring architectural sign-off prior to writing changes." },
+            { id: "3.5", domainId: "d3", domainName: "03. Claude Code (20%)", moduleNum: "3.5", moduleTitle: "Iterative Refinement", term: "Iterative Feedback Loop", phonetic: "/ɪˈtər.ə.tɪv ˈfiːd.bæk luːp/", ptTranslation: "Ciclo de Refinamento Iterativo", definition: "Refining code implementations through incremental test runs, reading error diagnostics, and applying targeted edits.", example: "Claude ran the test suite, read the failure output, edited line 42, and re-verified iteratively.", keyContext: "Focuses on minimal diff edits using targeted tools rather than rewriting entire files." },
+            { id: "3.6", domainId: "d3", domainName: "03. Claude Code (20%)", moduleNum: "3.6", moduleTitle: "CI/CD Pipeline Integration", term: "Headless CLI Execution", phonetic: "/ˈhed.ləs ˌiː.sī-el-ˈaɪ/", ptTranslation: "Execução CLI Headless Não Interativa", definition: "Running Claude Code inside automated pipeline environments (like GitHub Actions) using programmatic flags and environment keys.", example: "In CI/CD, Claude executes in non-interactive mode to review pull request diffs automatically.", keyContext: "Requires headless flag setup, mock inputs, and strict output handling." },
+
+            { id: "4.1", domainId: "d4", domainName: "04. Prompts & Output (20%)", moduleNum: "4.1", moduleTitle: "System Prompts", term: "Categorical Explicit Criteria", phonetic: "/ˌkæt.əˈɡɒr.ɪ.kəl ɪkˈsplɪs.ɪt kraɪˈtɪə.ri.ə/", ptTranslation: "Critérios Categóricos Explícitos", definition: "Providing precise rules and edge-case boundaries in system prompts instead of vague instructions like 'be conservative'.", example: "Replacing 'report severe bugs' with explicit criteria specifying exactly what error codes to flag dramatically reduced false positives.", keyContext: "Exam Trap: Vague words like 'be careful' fail. Categorical explicit criteria are the correct answer." },
+            { id: "4.2", domainId: "d4", domainName: "04. Prompts & Output (20%)", moduleNum: "4.2", moduleTitle: "Few-Shot Prompting", term: "Few-Shot Exemplars", phonetic: "/fjuː-ʃɒt ɪɡˈzem.plɑːz/", ptTranslation: "Exemplares Demonstrativos Few-Shot", definition: "Including high-quality input-output pairs inside the prompt to guide output structure, tone, and reasoning style.", example: "Providing three few-shot exemplars with complex XML formats eliminated syntax parsing errors.", keyContext: "The most effective method for teaching non-standard formatting without extra fine-tuning." },
+            { id: "4.3", domainId: "d4", domainName: "04. Prompts & Output (20%)", moduleNum: "4.3", moduleTitle: "Structured Output", term: "Forced Tool Structured Extraction", phonetic: "/fɔːst tuːl ˈstrʌk.tʃəd/", ptTranslation: "Extração Estruturada via Ferramentas", definition: "Utilizing tool calling mechanisms to force Claude to output strictly typed JSON objects matching a JSON schema.", example: "To guarantee JSON response schema compliance, we wrapped our extraction format as a dummy tool definition.", keyContext: "Stronger than asking for JSON in raw text prompts; avoids markdown wrapping issues." },
+            { id: "4.4", domainId: "d4", domainName: "04. Prompts & Output (20%)", moduleNum: "4.4", moduleTitle: "Validation & Retry Loops", term: "Validation Feedback Reflection", phonetic: "/ˌvæl.ɪˈdeɪ.ʃən ˈfiːd.bæk/", ptTranslation: "Reflexão por Feedback de Validação", definition: "Feeding system validation failures back into the model prompt to allow self-correction on subsequent tries.", example: "When schema validation failed, the exact Pydantic error message was injected into the follow-up user prompt.", keyContext: "Prevents system crashes by letting the model fix its syntax errors dynamically." },
+            { id: "4.5", domainId: "d4", domainName: "04. Prompts & Output (20%)", moduleNum: "4.5", moduleTitle: "Batch Processing", term: "Message Batching Optimization", phonetic: "/ˈmes.ɪdʒ ˈbætʃ.ɪŋ/", ptTranslation: "Processamento em Lote (Message Batches)", definition: "Submitting large groups of non-urgent API prompts via Anthropic's Message Batches API for 50% lower cost.", example: "Nightly documentation processing was migrated to the Message Batches API to reduce costs.", keyContext: "Asynchronous background processing with 24-hour turnaround window." },
+            { id: "4.6", domainId: "d4", domainName: "04. Prompts & Output (20%)", moduleNum: "4.6", moduleTitle: "Multi-Pass Review", term: "Multi-Pass Verification Pattern", phonetic: "/ˈmʌl.ti-pɑːs ˌver.ɪ.fɪˈkeɪ.ʃən/", ptTranslation: "Padrão de Verificação Multipasso", definition: "Using separate LLM calls—one to draft responses and a second, independent call to review/verify for errors.", example: "A multi-pass review pattern caught hallucinated import paths before writing changes to disk.", keyContext: "Significantly boosts accuracy on high-stakes code generation or medical compliance tasks." },
+
+            { id: "5.1", domainId: "d5", domainName: "05. Context & Reliability (15%)", moduleNum: "5.1", moduleTitle: "Context Window Management", term: "Dynamic Context Truncation", phonetic: "/daɪˈnæm.ɪk ˈkɒn.tekst trʌŋˈkeɪ.ʃən/", ptTranslation: "Truncamento Dinâmico de Contexto", definition: "Pruning old conversational history or summarizing intermediate tool logs to maintain performance within token limits.", example: "To prevent context bloat, older chat messages were condensed into a key-facts summary.", keyContext: "Prevents latency spikes and maintains attention on fresh prompt tokens." },
+            { id: "5.2", domainId: "d5", domainName: "05. Context & Reliability (15%)", moduleNum: "5.2", moduleTitle: "Ambiguity Resolution", term: "Ambiguity Escalation Route", phonetic: "/ˌæm.bɪˈɡjuː.ə.ti ˌes.kəˈleɪ.ʃən/", ptTranslation: "Rota de Escalabilidade por Ambiguidade", definition: "System design pattern where the model explicitly pauses execution to request user clarification when input specifications conflict.", example: "When conflicting system configs were detected, the agent escalated the issue to human review rather than guessing.", keyContext: "Prevents destructive automated execution under uncertain conditions." },
+            { id: "5.3", domainId: "d5", domainName: "05. Context & Reliability (15%)", moduleNum: "5.3", moduleTitle: "Error Propagation", term: "Error Cascading", phonetic: "/ˈer.ər kæsˈkeɪ.dɪŋ/", ptTranslation: "Efeito Cascata de Erro em Agentes", definition: "The risk of a single false assumption or hallucination in early agents propagating and compounding across downstream agents.", example: "Unchecked hallucinated data in Agent A caused Agents B and C to fail down the line.", keyContext: "Requires strict validation gates between agent steps to arrest faulty states." },
+            { id: "5.4", domainId: "d5", domainName: "05. Context & Reliability (15%)", moduleNum: "5.4", moduleTitle: "Codebase Exploration", term: "Context Degradation in Exploration", phonetic: "/ˈkɒn.tekst ˌdeɡ.rəˈdeɪ.ʃən/", ptTranslation: "Degradação de Contexto por Leitura", definition: "Loss of recall efficiency caused by dumping thousands of unneeded lines of code into the active context window.", example: "Using targeted Grep searches instead of dumping whole directories prevented severe context degradation.", keyContext: "Always read targeted files rather than bulk reading the whole codebase." },
+            { id: "5.5", domainId: "d5", domainName: "05. Context & Reliability (15%)", moduleNum: "5.5", moduleTitle: "Confidence Calibration", term: "Confidence Calibration & Stratified Sampling", phonetic: "/ˈkɒn.fɪ.dəns ˌkæl.ɪˈbreɪ.ʃən/", ptTranslation: "Calibração de Confiança e Amostragem", definition: "Validating model confidence metrics against labeled ground-truth datasets broken down by category, not just overall average accuracy.", example: "Aggregate metrics masked poor extraction on scanned PDFs; stratified sampling revealed the issue.", keyContext: "Exam core concept: Never judge reliability by aggregate accuracy alone; break down by document type." },
+            { id: "5.6", domainId: "d5", domainName: "05. Context & Reliability (15%)", moduleNum: "5.6", moduleTitle: "Information Provenance", term: "Source Provenance Attribution", phonetic: "/sɔːs ˈprɒv.ən.əns/", ptTranslation: "Atribuição de Proveniência de Fontes", definition: "Tracking and citing exact original source context IDs when synthesizing answers across multiple documentation files.", example: "The model appended source provenance metadata to every extracted requirement paragraph.", keyContext: "Crucial for auditability in enterprise search and RAG architectures." }
+        ];
+
+        const QUIZ_QUESTIONS = [
+            { id: 1, module: "2.5 Built-in Tools", domain: "02. Tools & MCP (18%)", questionEn: "A developer needs to search a codebase to find all files that call a specific function named 'processOrder()', and then find all test files matching the naming pattern '*.test.tsx'. Which built-in tools should be used for each action?", options: ["A) Use Glob to find the function callers, and Grep to match the filename patterns.", "B) Use Grep to search for 'processOrder()' inside files, and Glob to locate filenames matching '*.test.tsx'.", "C) Use Read to parse all files line by line for both tasks.", "D) Use Edit to substitute the function name and Glob to list directories."], correctIndex: 1, explanationEn: "Grep searches TEXT CONTENTS inside files (e.g., finding where 'processOrder()' is called), whereas Glob matches FILE PATHS/NAMES using wildcard patterns (e.g., '*.test.tsx').", explanationPt: "O Grep pesquisa o CONTEÚDO do texto dentro dos arquivos, enquanto o Glob pesquisa NOMES OU CAMINHOS de arquivos usando padrões." },
+            { id: 2, module: "4.1 System Prompts", domain: "04. Prompts & Output (20%)", questionEn: "An engineer wants to reduce false positives in a code auditing prompt. Which system prompt modification provides the most reliable precision improvement?", options: ["A) Adding vague instructions like 'be very conservative and only report high-confidence issues'.", "B) Instructing the model to 'try its best' to ignore style issues.", "C) Defining specific categorical explicit criteria specifying exactly what code structures to flag and what to skip.", "D) Raising the model temperature parameter to 0.9."], correctIndex: 2, explanationEn: "Vague terms like 'be conservative' do not provide actionable boundaries to the model. Specific categorical explicit criteria defining exact conditions are required.", explanationPt: "Instruções vagas como 'seja conservador' falham na IA. A solução correta é definir critérios categóricos explícitos detalhando o que apontar e o que ignorar." },
+            { id: 3, module: "5.5 Human Review", domain: "05. Context & Reliability (15%)", questionEn: "A team measures overall extraction accuracy at 94% across all processed invoices and considers automating all extractions above a 90% confidence score. What critical issue does this approach overlook?", options: ["A) The confidence threshold should always be set to 100% without exception.", "B) Aggregate accuracy can mask poor performance on specific document types or fields, requiring calibration against ground-truth validation sets.", "C) Automated models continuously retrain themselves and lose calibration over time.", "D) Human review is never necessary if aggregate accuracy exceeds 90%."], correctIndex: 1, explanationEn: "Aggregate accuracy metrics can conceal severe failure rates in specific document categories (e.g., scanned or handwritten fields). Stratified sampling and segment calibration are necessary.", explanationPt: "Métricas agregadas de precisão podem esconder taxas de erro graves em categorias específicas de documentos. É necessário calibrar e analisar os dados por segmento." }
+        ];
+
+        const SCENARIOS_DATA = [
+            {
+                id: "sc1",
+                domain: "01. Architecture (27%)",
+                title: "Cenário de Produção: Isolamento de Contexto em Subagentes",
+                scenarioEn: "An enterprise support orchestrator delegates log file analysis to a specialized subagent. The raw log file is 45,000 tokens long. After the subagent completes the analysis, the parent orchestrator's active window swells unexpectedly, causing high latency and token cost overruns.",
+                question: "What architectural adjustment would have best prevented this context bloat?",
+                options: [
+                    "A) Increase the parent model's max output tokens limit.",
+                    "B) Pass the raw log file directly to both parent and subagent simultaneously.",
+                    "C) Ensure the subagent operates with a scoped prompt history and returns only a concise summary payload to the parent.",
+                    "D) Disable system prompts entirely in the parent orchestrator."
+                ],
+                correctIndex: 2,
+                explanationEn: "Subagents should have scoped, minimal prompt histories and return summarized outputs, preventing raw logs from contaminating the parent context window.",
+                explanationPt: "Subagentes devem isolar o contexto e retornar apenas um resumo estruturado, evitando que logs pesados poluam a janela principal do orquestrador."
+            },
+            {
+                id: "sc2",
+                domain: "02. Tools & MCP (18%)",
+                title: "Cenário de Produção: Resposta de Erro para Auto-Correção",
+                scenarioEn: "A tool execution returns a raw Java stack trace ('NullPointerException at Line 84') when Claude provides an invalid date argument. Claude receives the stack trace and gets stuck in a repetitive loop trying the exact same invalid date format 3 times.",
+                question: "How should the tool error response be redesigned to enable effective model self-correction?",
+                options: [
+                    "A) Return a clear, informative error payload explaining what parameter failed and the expected format (e.g., 'Invalid date format: Expected YYYY-MM-DD').",
+                    "B) Throw an unhandled system exception to crash the worker thread safely.",
+                    "C) Return an empty string to let Claude guess the format.",
+                    "D) Hide the error message completely from the tool output."
+                ],
+                correctIndex: 0,
+                explanationEn: "Claude relies on informative tool error payloads to understand why arguments failed and dynamically self-correct them in the subsequent agentic loop.",
+                explanationPt: "Claude precisa de cargas úteis de erro descritivas e orientativas para compreender o argumento incorreto e se autocorrigir no próximo ciclo."
+            },
+            {
+                id: "sc3",
+                domain: "04. Prompts & Output (20%)",
+                title: "Cenário de Produção: Garantia de Schema JSON Estrito",
+                scenarioEn: "An application requires Claude to output structured JSON data representing customer risk profiles. When instructed in plain text ('Output JSON only'), Claude occasionally wraps the response in markdown code blocks or adds conversational introductory text, breaking downstream parsers.",
+                question: "Which mechanism guarantees strict structural compliance without parsing failures?",
+                options: [
+                    "A) Asking the user politely in the prompt to avoid markdown.",
+                    "B) Utilizing forced tool calling or structured extraction schema mechanisms to guarantee typed outputs.",
+                    "C) Lowering the temperature to 0.0.",
+                    "D) Using regex replacement on the raw string output."
+                ],
+                correctIndex: 1,
+                explanationEn: "Using tool calling mechanisms or strict structured extraction guarantees that Claude outputs valid objects matching the precise JSON schema.",
+                explanationPt: "O uso de mecanismos de tool calling ou extração estruturada estrita garante que a resposta cumpra o schema esperado, evitando falhas do parser."
+            },
+            {
+                id: "sc4",
+                domain: "01. Architecture (27%)",
+                title: "Cenário de Produção: Gate para Operação Financeira",
+                scenarioEn: "A customer-support agent can call get_customer, lookup_order, and process_refund. The business requires customer identity verification before any refund is processed. A system-prompt instruction works most of the time, but the business cannot accept occasional bypasses.",
+                question: "Which approach provides deterministic enforcement of the required workflow?",
+                options: [
+                    "A) Add stronger wording and more examples to the system prompt.",
+                    "B) Add a prerequisite gate that blocks process_refund until a verified customer ID exists in the current session.",
+                    "C) Ask Claude to explain why it skipped verification after every refund.",
+                    "D) Add a few-shot example showing the correct refund sequence."
+                ],
+                correctIndex: 1,
+                explanationEn: "A prerequisite gate physically blocks the downstream tool until the required condition is satisfied. Prompt instructions are probabilistic and can be bypassed.",
+                explanationPt: "Um prerequisite gate bloqueia programaticamente a operação até que a condição obrigatória seja satisfeita. Prompt e few-shot oferecem orientação, mas não garantia determinística."
+            },
+            {
+                id: "sc5",
+                domain: "01. Architecture (27%)",
+                title: "Cenário de Produção: PreToolUse versus PostToolUse",
+                scenarioEn: "An international-transfer agent must never execute transfer_funds before an AML check passes. The team is deciding whether to enforce the rule with a PreToolUse hook, a PostToolUse hook, or additional prompt instructions.",
+                question: "Which mechanism is appropriate for blocking the transfer before it executes?",
+                options: [
+                    "A) PostToolUse, because it can inspect the transfer after execution.",
+                    "B) PreToolUse, because it intercepts the tool call before execution and can block it.",
+                    "C) A stronger system prompt, because prompts provide deterministic enforcement.",
+                    "D) Few-shot examples showing Claude how to perform the AML check."
+                ],
+                correctIndex: 1,
+                explanationEn: "PreToolUse runs before the tool executes and can deny the call. PostToolUse runs after execution, so it cannot prevent a non-compliant transfer that already happened.",
+                explanationPt: "PreToolUse executa antes da ferramenta e pode bloquear a chamada. PostToolUse acontece depois da execução e, portanto, não consegue impedir uma operação que já ocorreu."
+            },
+            {
+                id: "sc6",
+                domain: "03. Claude Code (20%)",
+                title: "Cenário de Produção: Regras no CLAUDE.md",
+                scenarioEn: "A repository contains project-wide instructions in CLAUDE.md, while a nested module needs additional conventions that should apply only to files inside that module. The team wants the broader rules to remain active while the module-specific rules apply only within their scope.",
+                question: "Which configuration approach best matches this requirement?",
+                options: [
+                    "A) Delete the project-level CLAUDE.md and put every rule in one global file.",
+                    "B) Put the module rules in the nested scope so Claude Code can combine broader instructions with more specific local conventions.",
+                    "C) Repeat all repository rules manually in every source file.",
+                    "D) Put module-specific conventions only in a one-time chat message."
+                ],
+                correctIndex: 1,
+                explanationEn: "The configuration hierarchy supports broader instructions together with more specific scoped rules. This keeps project-wide guidance while applying local conventions only where they belong.",
+                explanationPt: "A hierarquia de configuração permite manter regras gerais do projeto e acrescentar regras mais específicas no escopo do módulo, evitando duplicação desnecessária."
+            },
+            {
+                id: "sc7",
+                domain: "05. Context & Reliability (15%)",
+                title: "Cenário de Produção: Contexto Desatualizado após Mudanças",
+                scenarioEn: "An agent resumes a long-running coding session after several files have changed outside the original conversation. Some tool results and assumptions in the previous context are now stale. The team wants to preserve useful knowledge without relying on outdated tool state.",
+                question: "Which session strategy best addresses this stale-context problem?",
+                options: [
+                    "A) Resume the old session unchanged and trust all previous tool results.",
+                    "B) Start fresh and inject a structured summary of the relevant knowledge, then re-analyse changed areas as needed.",
+                    "C) Keep appending every changed file to the original context indefinitely.",
+                    "D) Disable tool use so the model cannot encounter conflicting information."
+                ],
+                correctIndex: 1,
+                explanationEn: "A fresh start with structured summary injection preserves useful knowledge without carrying stale tool results. Targeted re-analysis can then refresh only the areas that changed.",
+                explanationPt: "Um novo contexto com resumo estruturado preserva o conhecimento útil sem carregar resultados de ferramentas desatualizados. As áreas alteradas podem ser reanalisadas de forma direcionada."
+            },
+            {
+                id: "sc8",
+                domain: "05. Context & Reliability (15%)",
+                title: "Cenário de Produção: Proveniência em Múltiplas Fontes",
+                scenarioEn: "A research agent combines information from several internal sources. Two sources provide conflicting values for the same claim. The final answer must allow reviewers to understand where each important statement came from.",
+                question: "What approach best supports reliable synthesis and review of conflicting information?",
+                options: [
+                    "A) Remove source information before synthesis so the model can answer without distractions.",
+                    "B) Preserve structured source attribution and distinguish claims by their provenance during synthesis.",
+                    "C) Always prefer the newest-looking value without recording its source.",
+                    "D) Merge the conflicting values into one statement without indicating the disagreement."
+                ],
+                correctIndex: 1,
+                explanationEn: "Structured provenance keeps source attribution attached to claims, making multi-source synthesis auditable and allowing reviewers to identify conflicts instead of hiding them.",
+                explanationPt: "A proveniência estruturada mantém a origem associada às afirmações, tornando a síntese auditável e permitindo identificar conflitos entre fontes."
+            }
+        ];
+
+        function HelpTooltip({ title, text, position = "top", align = "center" }) {
+            const [open, setOpen] = useState(false);
+            
+            let posClass = position === "bottom" ? "top-full mt-2" : "bottom-full mb-2";
+            let alignClass = "left-1/2 -translate-x-1/2";
+            let arrowAlignClass = "left-1/2 -translate-x-1/2";
+            
+            if (align === "right") {
+                alignClass = "right-0 translate-x-0";
+                arrowAlignClass = "right-2 translate-x-0";
+            } else if (align === "left") {
+                alignClass = "left-0 translate-x-0";
+                arrowAlignClass = "left-2 translate-x-0";
+            }
+
+            const arrowPosClass = position === "bottom"
+                ? `bottom-full border-4 border-transparent border-b-slate-950 ${arrowAlignClass}`
+                : `top-full border-4 border-transparent border-t-slate-950 ${arrowAlignClass}`;
+
+            return (
+                <div className="relative inline-block ml-1 z-50">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+                        onMouseEnter={() => setOpen(true)}
+                        onMouseLeave={() => setOpen(false)}
+                        className="w-4 h-4 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 text-amber-400 text-[10px] font-mono font-bold inline-flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                        aria-label="Ajuda"
+                    >
+                        ?
+                    </button>
+                    {open && (
+                        <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute z-50 w-56 sm:w-64 p-3 bg-slate-950 border border-amber-500/40 rounded-xl shadow-2xl text-left ${posClass} ${alignClass}`}
+                        >
+                            <p className="text-xs font-bold text-amber-400 font-mono mb-1">{title}</p>
+                            <p className="text-[11px] text-slate-300 leading-normal font-sans whitespace-normal">{text}</p>
+                            <div className={`absolute ${arrowPosClass}`}></div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('flashcards');
+            const [selectedDomain, setSelectedDomain] = useState('ALL');
+            const [statusFilter, setStatusFilter] = useState('ALL');
+            const [currentCardIndex, setCurrentCardIndex] = useState(0);
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [cardAnimKey, setCardAnimKey] = useState(0);
+            const [activeInfoDomain, setActiveInfoDomain] = useState(null);
+            const [lastStudyAction, setLastStudyAction] = useState(() => localStorage.getItem('ccar_last_study_action') || 'flashcards');
+            
+            // Estado para o Modal / Guia de Instruções na Aplicação
+            const [isGuideOpen, setIsGuideOpen] = useState(false);
+            const [guideSection, setGuideSection] = useState('objetivo');
+            const [guideReturn, setGuideReturn] = useState(null);
+            const [guideHighlight, setGuideHighlight] = useState(false);
+            
+            const [learnedStatus, setLearnedStatus] = useState(() => {
+                return window.CCARStorage?.read('ccar_learned_status', {}) || {};
+            });
+
+            const [quizIndex, setQuizIndex] = useState(0);
+            const [selectedOption, setSelectedOption] = useState(null);
+            const [score, setScore] = useState(0);
+            const [timer, setTimer] = useState(60);
+            const [isTimerActive, setIsTimerActive] = useState(true);
+
+            const [scenarioIndex, setScenarioIndex] = useState(0);
+            const [selectedScenarioOption, setSelectedScenarioOption] = useState(null);
+
+            useEffect(() => {
+                window.CCARStorage?.write('ccar_learned_status', learnedStatus);
+            }, [learnedStatus]);
+
+            useEffect(() => {
+                localStorage.setItem('ccar_last_study_action', lastStudyAction);
+            }, [lastStudyAction]);
+
+            const goStudy = (action) => {
+                setLastStudyAction(action);
+                if (action === 'english') {
+                    window.location.href = 'english-breakdown.html';
+                    return;
+                }
+                if (action === 'scenarios') {
+                    setActiveTab('scenarios');
+                    return;
+                }
+                if (action === 'quiz') {
+                    setActiveTab('quiz');
+                    setTimer(60);
+                    setIsTimerActive(true);
+                    return;
+                }
+                setActiveTab(action);
+            };
+
+            const lastStudyLabel = {
+                flashcards: 'Flashcards',
+                dictionary: 'Dicionário',
+                scenarios: 'Cenários Práticos',
+                quiz: 'Simulador',
+                english: 'English Breakdown'
+            }[lastStudyAction] || 'Flashcards';
+
+            useEffect(() => {
+                const target = new URLSearchParams(window.location.search).get('help');
+                if (target) {
+                    setGuideSection(target);
+                    setGuideHighlight(true);
+                    setGuideReturn(new URLSearchParams(window.location.search).get('return'));
+                    setIsGuideOpen(true);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, []);
+
+            useEffect(() => {
+                if (!isGuideOpen) return;
+                const el = document.getElementById('guide-' + guideSection);
+                if (!el) return;
+                const timer = setTimeout(() => {
+                    el.scrollIntoView({behavior:'smooth', block:'start'});
+                    if (guideHighlight) {
+                        el.classList.remove('guide-context-highlight');
+                        void el.offsetWidth;
+                        el.classList.add('guide-context-highlight');
+                        const clear = setTimeout(() => el.classList.remove('guide-context-highlight'), 4200);
+                        window.__ccarGuideHighlightTimer = clear;
+                        setGuideHighlight(false);
+                    }
+                }, 120);
+                return () => {
+                    clearTimeout(timer);
+                    if (window.__ccarGuideHighlightTimer) clearTimeout(window.__ccarGuideHighlightTimer);
+                };
+            }, [isGuideOpen, guideSection, guideHighlight]);
+
+            const openGuide = (section='objetivo') => {
+                setGuideReturn(null);
+                setGuideHighlight(false);
+                setGuideSection(section);
+                setIsGuideOpen(true);
+            };
+
+            const closeGuide = () => {
+                if (guideReturn === 'breakdown') {
+                    try { sessionStorage.removeItem('ccar_help_return'); } catch (e) {}
+                    window.location.href = 'english-breakdown.html';
+                    return;
+                }
+                setIsGuideOpen(false);
+            };
+
+            useEffect(() => {
+                let interval = null;
+                if (activeTab === 'quiz' && isTimerActive && timer > 0 && selectedOption === null) {
+                    interval = setInterval(() => {
+                        setTimer(prevTimer => prevTimer - 1);
+                    }, 1000);
+                } else if (timer === 0 && selectedOption === null) {
+                    setSelectedOption(-1);
+                }
+                return () => clearInterval(interval);
+            }, [activeTab, isTimerActive, timer, selectedOption]);
+
+            const speakText = useCallback((text) => {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.9;
+                    window.speechSynthesis.speak(utterance);
+                }
+            }, []);
+
+            const setStatus = (id, status) => {
+                setLearnedStatus(prev => ({ ...prev, [id]: status }));
+            };
+
+            const resetProgress = () => {
+                window.AppModal?.confirm({
+                    type: 'danger',
+                    title: 'Zerar progresso de estudos?',
+                    message: 'Todo o progresso dos flashcards desta página será apagado. Esta ação não pode ser desfeita.',
+                    confirmText: 'Zerar progresso',
+                    cancelText: 'Cancelar'
+                }).then(ok => {
+                    if (!ok) return;
+                    setLearnedStatus({});
+                    localStorage.removeItem('ccar_learned_status');
+                    window.AppModal?.alert({type:'success', title:'Progresso zerado', message:'O progresso dos flashcards foi reiniciado.'});
+                });
+            };
+
+            const filteredVocab = VOCAB_DATA.filter(item => {
+                const matchesDomain = selectedDomain === 'ALL' || item.domainId === selectedDomain;
+                const matchesStatus = statusFilter === 'ALL' || (learnedStatus[item.id] || 'unlearned') === statusFilter;
+                return matchesDomain && matchesStatus;
+            });
+
+            const currentCard = filteredVocab[currentCardIndex] || filteredVocab[0];
+
+            const handleNextCard = useCallback(() => {
+                setIsFlipped(false);
+                setCardAnimKey(prev => prev + 1);
+                setTimeout(() => {
+                    setCurrentCardIndex((prev) => (prev + 1) % (filteredVocab.length || 1));
+                }, 50);
+            }, [filteredVocab.length]);
+
+            const handlePrevCard = useCallback(() => {
+                setIsFlipped(false);
+                setCardAnimKey(prev => prev + 1);
+                setTimeout(() => {
+                    setCurrentCardIndex((prev) => (prev - 1 + filteredVocab.length) % (filteredVocab.length || 1));
+                }, 50);
+            }, [filteredVocab.length]);
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (activeTab !== 'flashcards') return;
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        setIsFlipped(f => !f);
+                    } else if (e.code === 'ArrowRight') {
+                        handleNextCard();
+                    } else if (e.code === 'ArrowLeft') {
+                        handlePrevCard();
+                    } else if (e.code === 'KeyA' && currentCard) {
+                        speakText(currentCard.term);
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [activeTab, handleNextCard, handlePrevCard, speakText, currentCard]);
+
+            const easyCount = Object.values(learnedStatus).filter(v => v === 'easy').length;
+            const progressPct = Math.round((easyCount / VOCAB_DATA.length) * 100);
+
+            const domainInfos = {
+                'ALL': 'Exibe todos os 30 módulos dos 5 domínios da prova.',
+                'd1': 'Domínio 1 (27% da prova): Agentic Loops, Multi-agent, Subagents, Session state.',
+                'd2': 'Domínio 2 (18% da prova): Tool Design, MCP Primitives, Grep vs Glob, Error payloads.',
+                'd3': 'Domínio 3 (20% da prova): CLAUDE.md, Custom Slash Commands, Plan Mode, CI/CD.',
+                'd4': 'Domínio 4 (20% da prova): Categorical Explicit Criteria, Few-shot, Batches API.',
+                'd5': 'Domínio 5 (15% da prova): Context Truncation, Ambiguity Escalation, Stratified Sampling.'
+            };
+
+            return (
+                <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-6 relative">
+                    {/* MODAL DO GUIA INTERATIVO */}
+                    {isGuideOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/80 backdrop-blur-sm animate-tab-content">
+                            <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-3xl w-full shadow-2xl relative max-h-[92vh] overflow-hidden guide-modal">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xl">💡</span>
+                                        <h3 className="text-base sm:text-lg font-bold text-white font-mono">Como estudar com a plataforma</h3>
+                                    </div>
+                                    <button 
+                                        onClick={closeGuide}
+                                        className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 w-7 h-7 rounded-lg font-mono flex items-center justify-center transition-all"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="guide-toc"><div className="guide-toc-title">Navegação rápida</div><div className="guide-toc-grid">{[['objetivo','🎯 Objetivo'],['flashcards','🎴 Flashcards'],['cenarios','🏢 Cenários'],['diagnostico','🧪 Diagnóstico'],['aprender','📚 Aprender'],['adaptativo','🎯 Hoje / Adaptativo'],['revisao','🔄 Revisão no Hoje'],['patterns','🧩 Estruturas'],['englishOnly','🇺🇸 English Only'],['exam','⏱ Exam Mode'],['speed','⏱ Simulador'],['progresso','📈 Progresso'],['backup','💾 Backup'],['rotina','🧭 Roteiro']].map(([id,label])=><button key={id} onClick={()=>setGuideSection(id)} className={`guide-toc-item ${guideSection===id?'active':''}`}>{label}</button>)}</div></div>
+
+                                <div className="guide-modal-body space-y-4 text-xs sm:text-sm text-slate-300">
+                                    <div id="guide-objetivo" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🎯</span> 1. A ideia da plataforma
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            A plataforma tem duas trilhas complementares: <strong className="text-white">estudo técnico</strong> para quem quer revisar os conceitos e <strong className="text-emerald-400">inglês técnico</strong> para quem precisa fortalecer leitura e reconhecimento de estruturas. O English Breakdown é um apoio opcional — quem já domina o inglês técnico pode seguir direto pelos conceitos, cenários e simulador.
+                                        </p>
+                                    </div>
+
+                                    <div id="guide-flashcards" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🎴</span> 2. Flashcards & Dicionário
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Comece pelos termos técnicos. Use os <strong className="text-white">Flashcards</strong> principalmente para familiarização e consulta rápida: reveja o termo, definição, exemplo e contexto. O <strong className="text-white">Dicionário</strong> é ainda mais direto e serve para consulta livre. <strong className="text-slate-200">Você não precisa concluir os Flashcards antes de ir para o English Breakdown.</strong> Para treinamento estruturado e registro de desempenho, use o <strong className="text-emerald-400">English Breakdown → Aprender / Hoje</strong>.
+                                        </p>
+                                    </div>
+
+                                    <div id="guide-cenarios" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🏢</span> 3. Cenários Práticos
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Simulam situações técnicas de produção alinhadas aos cinco domínios da preparação. Leia o caso em inglês, identifique o requisito ou problema principal e escolha a abordagem mais adequada. A finalidade é conectar <strong className="text-white">vocabulário, interpretação e decisão técnica</strong>.
+                                        </p>
+                                    </div>
+
+                                    <div id="guide-englishOnly" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🇺🇸</span> 4. English Breakdown — módulo de inglês técnico
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed mb-2">
+                                            É o módulo específico para desenvolver interpretação do inglês técnico. Você não precisa usar todas as áreas em toda sessão.
+                                        </p>
+                                        <div className="guide-detail"><b>Fluxo principal:</b> Diagnóstico → Aprender → Estruturas → Hoje → English Only → Exam Mode. Depois, use Progresso para descobrir quais habilidades ainda precisam de atenção.</div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono">
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-amber-400">🧪 Diagnóstico</span> — mede o ponto de partida.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-emerald-400">📚 Aprender</span> — estuda vocabulário e pratica recuperação.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-cyan-400">🎯 Hoje</span> — aplica o treino adaptativo.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-violet-400">🔄 Revisão no Hoje</span> — traz os itens de volta no momento definido pelo histórico.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-blue-400">🧩 Estruturas</span> — reconhece padrões recorrentes de perguntas.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-orange-400">🇺🇸 English Only</span> — reduz a dependência da tradução.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-rose-400">⏱️ Exam Mode</span> — pratica interpretação sob tempo.</div>
+                                            <div className="bg-slate-900 rounded-lg px-2.5 py-2"><span className="text-lime-400">📈 Progresso</span> — acompanha os indicadores de preparação.</div>
+                                        </div>
+                                    </div>
+
+                                    <div id="guide-diagnostico" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1">🧪 Diagnóstico — como interpretar</h4>
+                                        <p className="text-slate-300 leading-relaxed">O diagnóstico estabelece uma linha de base para o treinamento. Faça-o sem consultar as outras abas. O resultado indica onde você começou dentro das categorias usadas pela aplicação; ele não é uma nota oficial de inglês nem uma previsão de aprovação.</p>
+                                        <div className="guide-detail"><b>O que fazer depois:</b> não tente repetir o diagnóstico até aumentar a pontuação. Use o resultado para orientar o estudo e deixe o desempenho posterior alimentar a adaptação.</div>
+                                    </div>
+
+                                    <div id="guide-adaptativo" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1">🧠 Treino adaptativo — por que esta questão apareceu?</h4>
+                                        <p className="text-slate-300 leading-relaxed">A fila prioriza itens vencidos para revisão, depois itens ainda não estudados e, quando necessário, conteúdos com desempenho ou estágio mais baixo. Isso evita que você passe todo o tempo estudando apenas aquilo que já domina.</p>
+                                        <div className="guide-detail"><b>Regra prática:</b> marque honestamente <i>Errei</i>, <i>Reconheci</i> ou <i>Fácil</i>. A utilidade da adaptação depende da qualidade dessas respostas.</div>
+                                    </div>
+
+                                    <div id="guide-revisao" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1">🔄 Revisão espaçada — por que voltar ao que já estudei?</h4>
+                                        <p className="text-slate-300 leading-relaxed">O sistema registra acertos, erros, estágio e próxima data de revisão. Um item que você recupera bem tende a ficar mais tempo sem aparecer; um item que você erra volta mais cedo.</p>
+                                        <div className="guide-detail"><b>Objetivo:</b> transformar reconhecimento recente em recuperação mais estável, em vez de depender de uma única sessão de estudo.</div>
+                                    </div>
+
+                                    <div id="guide-patterns" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1">🧩 Estruturas de perguntas — leia a função antes da tradução</h4>
+                                        <p className="text-slate-300 leading-relaxed">Treine estruturas como <i>Which approach would most effectively...</i>, <i>What should...</i>, <i>How can you ensure...</i>, <i>rather than</i>, <i>unless</i> e <i>in order to</i>. A intenção é reconhecer a função do bloco rapidamente: escolha, obrigação, condição, contraste ou finalidade.</p>
+                                        <div className="guide-detail"><b>Estratégia:</b> primeiro identifique o que a frase está fazendo; depois conecte a frase ao conceito técnico. Isso reduz a necessidade de traduzir palavra por palavra.</div>
+                                    </div>
+
+                                    <div id="guide-exam" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1">⏱ Exam Mode — aplicação</h4>
+                                        <p className="text-slate-300 leading-relaxed">Use o Exam Mode depois de construir vocabulário e reconhecer estruturas. As questões são material autoral de treinamento baseado no conteúdo da aplicação; não são apresentadas como questões oficiais da certificação.</p>
+                                        <div className="guide-detail"><b>Depois de responder:</b> não olhe apenas o acerto. Leia a explicação e identifique qual pista linguística e qual conceito técnico levaram à resposta.</div>
+                                    </div>
+
+                                    <div id="guide-rotina" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🧭</span> 5. Ordem recomendada de estudo
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            <strong className="text-white">Diagnóstico → Aprender → Estruturas → Hoje → English Only → Exam Mode.</strong> Depois, use Progresso para descobrir quais habilidades ainda precisam de atenção. Você não precisa dominar tudo antes de avançar; a ideia é voltar aos pontos fracos durante o treino adaptativo.
+                                        </p>
+                                    </div>
+
+                                    <div id="guide-speed" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>⏱️</span> 6. Simulador
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Use o <strong className="text-white">Simulador</strong> com <strong className="text-white">60 segundos por pergunta</strong> para praticar decisões sobre os <strong className="text-white">conceitos técnicos</strong> da plataforma. Ele é diferente do <strong className="text-emerald-400">Exam Mode</strong> do English Breakdown, que concentra o treino em <strong className="text-emerald-400">interpretação do inglês técnico sob tempo</strong>. As questões do aplicativo são material de treinamento; não trate nenhum dos dois como reprodução de questões oficiais da certificação.
+                                        </p>
+                                    </div>
+
+                                    <div id="guide-progresso" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>📊</span> 7. Domínios e progresso
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Use os filtros <strong className="text-white">Architecture, Tools, Code, Prompts e Context</strong> para estudar por área. O progresso ajuda a acompanhar sua evolução no vocabulário e, na trilha de inglês, dimensões como interpretação, estruturas de perguntas, conceitos técnicos, leitura, English Only e desempenho sob tempo.
+                                        </p>
+                                    </div>
+
+                                    <div id="guide-backup" className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 guide-anchor">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>💾</span> 8. Backup e sincronização
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Na seção <strong className="text-white">Backup</strong> do English Breakdown, use <strong className="text-emerald-400">Exportar meu progresso</strong> para gerar um arquivo <code className="text-amber-300">.json</code> com o progresso persistente de toda a aplicação, incluindo os Flashcards da página inicial. Em outro computador, use <strong className="text-cyan-400">Importar progresso</strong> para restaurar os dados. Exemplo: <span className="text-slate-200">PC → exportar JSON → guardar no Drive/pendrive → outro PC → importar JSON</span>.
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/20">
+                                        <h4 className="font-bold text-amber-300 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🧠</span> Regra principal
+                                        </h4>
+                                        <p className="text-slate-200 leading-relaxed">
+                                            Não tente decorar traduções isoladas. Procure reconhecer <strong className="text-white">o que a pergunta pede</strong>, as palavras que indicam condição, obrigação, contraste ou objetivo e, em seguida, conecte isso ao conceito técnico estudado.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 pt-3 border-t border-slate-800 flex justify-end">
+                                    <button
+                                        onClick={closeGuide}
+                                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95"
+                                    >
+                                        Entendido, Vamos Estudar!
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/80">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide">
+                                    ANTHROPIC CCAR-F
+                                </span>
+                                <span className="text-slate-400 text-xs font-mono">3-Month Accelerated Prep</span>
+                                <HelpTooltip 
+                                    title="Domínios de estudo" 
+                                    text="Os percentuais exibidos aqui são a organização de domínios usada pelo material desta aplicação. Consulte a fonte oficial para informações atuais sobre a certificação." 
+                                    position="bottom"
+                                    align="left"
+                                />
+                            </div>
+                            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
+                                Inglês Técnico para Certificação
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={() => openGuide('objetivo')}
+                                className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1 active:scale-95"
+                                title="Abrir Guia de Utilização"
+                            >
+                                <span>📖 Como Usar</span>
+                            </button>
+                            <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] sm:text-xs font-mono text-slate-300 flex items-center gap-1.5">
+                                <span>📊 Dominados: <span className="text-emerald-400 font-bold">{progressPct}%</span> ({easyCount}/30)</span>
+                            </div>
+                            <button
+                                onClick={resetProgress}
+                                className="bg-slate-900 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/50 px-2 py-1 rounded-lg text-xs font-mono transition-all active:scale-95"
+                                title="Zerar todo o progresso de estudos"
+                            >
+                                🗑️ Reset
+                            </button>
+
+                            <a
+                                href="english-breakdown.html"
+                                className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1 active:scale-95"
+                                title="Treinar interpretação do inglês técnico"
+                            >
+                                <span>🇺🇸 English Breakdown</span>
+                                <span className="text-emerald-400 text-xs">→</span>
+                            </a>
+                            <a 
+                                href="https://claudecertificationguide.com/learn" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 active:scale-95"
+                            >
+                                <span>Guia Oficial</span>
+                                <span className="text-amber-400 text-xs">↗</span>
+                            </a>
+                        </div>
+                    </header>
+
+                    {activeTab === 'flashcards' && (
+                        <section className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5 shadow-lg shadow-black/10 animate-tab-content">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                                <div>
+                                    <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 mb-1">Preparação para a certificação</div>
+                                    <h2 className="text-base sm:text-lg font-bold text-white">Como você quer estudar hoje?</h2>
+                                    <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">Escolha o caminho que combina com seu nível. O estudo técnico e o inglês técnico são trilhas complementares — ninguém precisa fazer o English Breakdown se já se sente confortável com o idioma.</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2 shrink-0">
+                                    <button onClick={()=>goStudy('flashcards')} className="home-path home-path-primary">🧠 <span><b>Estudo técnico</b><small>Flashcards → Cenários → Simulador</small></span></button>
+                                    <button onClick={()=>goStudy('english')} className="home-path home-path-english">🇺🇸 <span><b>Inglês técnico</b><small>Estruturas → Hoje → Exam Mode</small></span></button>
+                                    <button onClick={()=>openGuide('diagnostico')} className="home-path home-path-neutral">🤔 <span><b>Não tenho certeza</b><small>Veja por onde começar</small></span></button>
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-[11px] text-slate-500 font-mono">Última trilha: <span className="text-slate-300">{lastStudyLabel}</span></span>
+                                <button onClick={()=>goStudy(lastStudyAction)} className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 transition-colors">▶ Continuar de onde parei →</button>
+                            </div>
+                        </section>
+                    )}
+
+                    <div className="mb-2">
+                        <div className="overflow-x-auto no-scrollbar pb-1">
+                            <div className="flex items-center gap-2 w-max md:w-full md:grid md:grid-cols-6">
+                                {[
+                                    { id: 'ALL', label: '🌐 Todos' },
+                                    { id: 'd1', label: '📇 01. Arch (27%)' },
+                                    { id: 'd2', label: '🛠️ 02. Tools (18%)' },
+                                    { id: 'd3', label: '💻 03. Code (20%)' },
+                                    { id: 'd4', label: '🎨 04. Prompts (20%)' },
+                                    { id: 'd5', label: '⚡ 05. Context (15%)' }
+                                ].map(d => (
+                                    <div key={d.id} className="flex items-center">
+                                        <button 
+                                            onClick={() => { setSelectedDomain(d.id); setCurrentCardIndex(0); setIsFlipped(false); }}
+                                            className={`w-full px-3 py-1.5 sm:py-2 rounded-lg text-xs font-medium transition-all duration-200 text-center truncate flex items-center justify-between gap-1 active:scale-95 ${
+                                                selectedDomain === d.id 
+                                                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
+                                                    : 'bg-slate-900/90 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
+                                            }`}
+                                        >
+                                            <span className="truncate">{d.label}</span>
+                                            <span 
+                                                onClick={(e) => { e.stopPropagation(); setActiveInfoDomain(activeInfoDomain === d.id ? null : d.id); }}
+                                                className="w-4 h-4 rounded-full bg-slate-950/40 hover:bg-slate-950/80 text-[10px] font-mono inline-flex items-center justify-center shrink-0"
+                                                title={domainInfos[d.id]}
+                                            >
+                                                ?
+                                            </span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {activeInfoDomain && (
+                            <div className="mt-2 p-2.5 bg-slate-900/90 border border-amber-500/30 rounded-lg text-xs text-slate-300 flex items-center justify-between font-mono animate-tab-content">
+                                <div>
+                                    <span className="text-amber-400 font-bold mr-2">ℹ️ Sobre o Domínio:</span>
+                                    {domainInfos[activeInfoDomain]}
+                                </div>
+                                <button 
+                                    onClick={() => setActiveInfoDomain(null)}
+                                    className="text-slate-500 hover:text-slate-300 ml-2"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4 mt-3">
+                        <div className="flex flex-wrap gap-1.5 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80">
+                            <button
+                                onClick={() => goStudy('flashcards')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'flashcards'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>🎴 Flashcards</span>
+                                <span className="text-[10px] bg-slate-950/40 px-1 py-0.2 rounded font-mono">{filteredVocab.length}</span>
+                            </button>
+                            <button
+                                onClick={() => goStudy('dictionary')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'dictionary'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>📖 Dicionário</span>
+                            </button>
+                            <button
+                                onClick={() => { goStudy('scenarios'); }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'scenarios'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>🏢 Cenários Práticos</span>
+                                <span className="text-[10px] bg-slate-950/40 px-1 py-0.2 rounded font-mono">{SCENARIOS_DATA.length}</span>
+                            </button>
+                            <button
+                                onClick={() => { 
+                                    goStudy('quiz');
+                                    setTimer(60); 
+                                    setIsTimerActive(true); 
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'quiz'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>⏱️ Simulador</span>
+                            </button>
+                        </div>
+
+                        {activeTab === 'flashcards' && (
+                            <div className="flex items-center gap-1 bg-slate-900/60 p-1 rounded-lg border border-slate-800/80 text-[11px] font-mono">
+                                <span className="text-slate-500 px-1.5 hidden sm:inline">Filtrar:</span>
+                                <button 
+                                    onClick={() => { setStatusFilter('ALL'); setCurrentCardIndex(0); }}
+                                    className={`px-2 py-0.5 rounded transition-all ${statusFilter === 'ALL' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    Todos
+                                </button>
+                                <button 
+                                    onClick={() => { setStatusFilter('hard'); setCurrentCardIndex(0); }}
+                                    className={`px-2 py-0.5 rounded transition-all ${statusFilter === 'hard' ? 'bg-rose-950 text-rose-300 font-bold border border-rose-800/50' : 'text-slate-400 hover:text-rose-400'}`}
+                                >
+                                    ❌ Erros
+                                </button>
+                                <button 
+                                    onClick={() => { setStatusFilter('review'); setCurrentCardIndex(0); }}
+                                    className={`px-2 py-0.5 rounded transition-all ${statusFilter === 'review' ? 'bg-amber-950 text-amber-300 font-bold border border-amber-800/50' : 'text-slate-400 hover:text-amber-400'}`}
+                                >
+                                    ⚠️ Difíceis
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="context-help-row">{activeTab === 'flashcards' && <button onClick={()=>openGuide('flashcards')} className="context-help">💡 Como estudar com os flashcards?</button>}{activeTab === 'dictionary' && <button onClick={()=>openGuide('flashcards')} className="context-help">💡 Como usar o dicionário?</button>}{activeTab === 'scenarios' && <button onClick={()=>openGuide('cenarios')} className="context-help">💡 Como estudar os cenários?</button>}{activeTab === 'quiz' && <button onClick={()=>openGuide('speed')} className="context-help">💡 Como usar o simulador?</button>}</div>
+
+                    {/* TAB 1: FLASHCARDS */}
+                    {activeTab === 'flashcards' && (
+                        <div key={`flashcards-${selectedDomain}-${statusFilter}`} className="max-w-xl mx-auto animate-tab-content pb-10">
+                            {filteredVocab.length === 0 ? (
+                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 font-mono">
+                                    <p className="text-lg mb-2">🎉 Nenhum cartão nesta categoria!</p>
+                                    <p className="text-xs text-slate-500">Você não possui cartões salvos sob o filtro selecionado.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-center text-xs font-mono text-slate-400 mb-2 px-1">
+                                        <span>Termo {currentCardIndex + 1} de {filteredVocab.length}</span>
+                                        <span className="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50 text-[11px]">
+                                            Módulo {currentCard.moduleNum}
+                                        </span>
+                                    </div>
+
+                                    <div 
+                                        key={cardAnimKey}
+                                        onClick={() => setIsFlipped(!isFlipped)}
+                                        className={`card-flip cursor-pointer w-full relative animate-card-next ${isFlipped ? 'flipped' : ''}`}
+                                    >
+                                        <div className="card-inner w-full">
+                                            {/* FRONT */}
+                                            <div className="card-front bg-gradient-to-b from-slate-900 to-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col justify-between shadow-xl">
+                                                <div>
+                                                    <div className="flex items-center justify-between text-[11px] font-mono text-amber-400/90 mb-2.5">
+                                                        <span className="bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30 font-semibold truncate max-w-[220px] sm:max-w-[280px]">
+                                                            {currentCard.domainName}
+                                                        </span>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); speakText(currentCard.term); }}
+                                                            className="p-1 bg-slate-800 hover:bg-slate-700 rounded-md text-amber-400 transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                                                            title="Ouvir Pronúncia"
+                                                        >
+                                                            🔊 <span className="text-[10px]">Ouvir</span>
+                                                        </button>
+                                                    </div>
+                                                    <h2 className="text-lg sm:text-2xl font-bold text-white font-mono tracking-tight mb-0.5">
+                                                        {currentCard.term}
+                                                    </h2>
+                                                    <p className="text-[11px] font-mono text-slate-400 mb-3">{currentCard.phonetic}</p>
+                                                    
+                                                    <div className="bg-slate-950/80 p-3 sm:p-3.5 rounded-xl border border-slate-800/80 relative">
+                                                        <div className="flex justify-between items-center mb-0.5">
+                                                            <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">ENGLISH TECHNICAL DEFINITION:</p>
+                                                            <HelpTooltip title="Definição em inglês" text="Definição técnica usada pelo material de estudo da aplicação." align="right" />
+                                                        </div>
+                                                        <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+                                                            "{currentCard.definition}"
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 flex justify-between items-center text-xs text-slate-500 font-mono border-t border-slate-800/80 pt-2.5">
+                                                    <span>Toque para ver a resposta</span>
+                                                    <span className="text-amber-400">Ver resposta →</span>
+                                                </div>
+                                            </div>
+
+                                            {/* BACK */}
+                                            <div className="card-back absolute top-0 left-0 w-full h-full bg-slate-900 border border-amber-500/30 rounded-2xl p-3 sm:p-5 flex flex-col justify-between shadow-xl">
+                                                <div className="space-y-1.5 sm:space-y-2">
+                                                    <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400">
+                                                        <span className="bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">
+                                                            TRADUÇÃO & APLICAÇÃO
+                                                        </span>
+                                                        <span className="text-slate-400">Voltar 🔄</span>
+                                                    </div>
+                                                    <h3 className="text-sm sm:text-lg font-bold text-emerald-300 leading-tight">
+                                                        {currentCard.ptTranslation}
+                                                    </h3>
+
+                                                    <div className="bg-slate-950/90 p-2 sm:p-2.5 rounded-lg border border-slate-800">
+                                                        <p className="text-[9px] sm:text-[10px] font-mono text-amber-400 uppercase tracking-wider mb-0.5">EXEMPLO EM INGLÊS:</p>
+                                                        <p className="text-[10px] sm:text-xs font-mono text-slate-300 italic line-clamp-2">
+                                                            "{currentCard.example}"
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="bg-slate-950/90 p-2 sm:p-2.5 rounded-lg border border-slate-800 relative">
+                                                        <div className="flex justify-between items-center mb-0.5">
+                                                            <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider">EXAM TRAP / CONTEXTO:</p>
+                                                            <HelpTooltip title="Exam Trap / contexto" text="O material destaca este ponto como uma possível fonte de confusão entre conceitos ou termos próximos." align="right" />
+                                                        </div>
+                                                        <p className="text-[10px] sm:text-xs text-slate-300 leading-snug line-clamp-2">
+                                                            {currentCard.keyContext}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-2 border-t border-slate-800/80" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center gap-1.5 w-full">
+                                                        <button 
+                                                            onClick={() => setStatus(currentCard.id, 'hard')}
+                                                            className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+                                                                learnedStatus[currentCard.id] === 'hard'
+                                                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500'
+                                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-rose-400'
+                                                            }`}
+                                                        >
+                                                            ❌ Errei
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setStatus(currentCard.id, 'review')}
+                                                            className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+                                                                learnedStatus[currentCard.id] === 'review'
+                                                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500'
+                                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-amber-400'
+                                                            }`}
+                                                        >
+                                                            ⚠️ Difícil
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setStatus(currentCard.id, 'easy')}
+                                                            className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+                                                                learnedStatus[currentCard.id] === 'easy'
+                                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500'
+                                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-emerald-400'
+                                                            }`}
+                                                        >
+                                                            ✅ Dominado
+                                                        </button>
+                                                        <HelpTooltip title="Classificação Leitner" text="Classifique para priorizar os cartões." align="right" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between mt-4">
+                                        <button 
+                                            onClick={handlePrevCard}
+                                            className="px-4 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-lg text-xs font-medium transition-all active:scale-95"
+                                        >
+                                            ← Anterior
+                                        </button>
+                                        <button 
+                                            onClick={handleNextCard}
+                                            className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg text-xs transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                                        >
+                                            Próximo →
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* TAB 2: DICTIONARY */}
+                    {activeTab === 'dictionary' && (
+                        <div key="dictionary" className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-tab-content pb-10">
+                            {VOCAB_DATA.map((item) => (
+                                <div key={item.id} className="bg-slate-900/80 border border-slate-800/80 p-4 rounded-xl flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-mono bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30">
+                                                Módulo {item.moduleNum}
+                                            </span>
+                                            <button 
+                                                onClick={() => speakText(item.term)}
+                                                className="text-[10px] font-mono text-slate-400 hover:text-amber-400 active:scale-95 transition-transform"
+                                            >
+                                                🔊 Pronúncia
+                                            </button>
+                                        </div>
+                                        <h3 className="text-base font-bold text-white font-mono">{item.term}</h3>
+                                        <p className="text-xs text-emerald-400 font-medium mb-2">{item.ptTranslation}</p>
+                                        <p className="text-xs text-slate-300 leading-relaxed mb-3">{item.definition}</p>
+                                    </div>
+                                    <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-xs font-mono text-slate-400">
+                                        <span className="text-amber-400 font-semibold block text-[10px] mb-0.5 uppercase">Exemplo:</span>
+                                        "{item.example}"
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* TAB 3: SCENARIOS-BASED QUESTIONS */}
+                    {activeTab === 'scenarios' && (
+                        <div key={`scenarios-${scenarioIndex}`} className="max-w-2xl mx-auto bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl animate-tab-content pb-10">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3">
+                                <span className="text-xs font-mono text-amber-400 uppercase tracking-wide font-semibold">
+                                    {SCENARIOS_DATA[scenarioIndex].domain}
+                                </span>
+                                <span className="text-xs font-mono text-slate-400 font-semibold bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                                    Caso {scenarioIndex + 1} / {SCENARIOS_DATA.length}
+                                </span>
+                            </div>
+
+                            <h3 className="text-base font-bold text-white mb-2 font-mono">
+                                {SCENARIOS_DATA[scenarioIndex].title}
+                            </h3>
+
+                            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/80 italic">
+                                "{SCENARIOS_DATA[scenarioIndex].scenarioEn}"
+                            </p>
+
+                            <p className="text-xs sm:text-sm font-semibold text-amber-300 mb-3">
+                                {SCENARIOS_DATA[scenarioIndex].question}
+                            </p>
+
+                            <div className="space-y-2 mb-4">
+                                {SCENARIOS_DATA[scenarioIndex].options.map((opt, idx) => {
+                                    let btnStyle = "bg-slate-950/80 hover:bg-slate-800 text-slate-200 border-slate-800";
+                                    if (selectedScenarioOption !== null) {
+                                        if (idx === SCENARIOS_DATA[scenarioIndex].correctIndex) {
+                                            btnStyle = "bg-emerald-950/80 text-emerald-200 border-emerald-500/80 font-semibold";
+                                        } else if (selectedScenarioOption === idx) {
+                                            btnStyle = "bg-rose-950/80 text-rose-200 border-rose-500/80";
+                                        }
+                                    }
+                                    return (
+                                        <button
+                                            key={idx}
+                                            onClick={() => {
+                                                if (selectedScenarioOption === null) {
+                                                    setSelectedScenarioOption(idx);
+                                                }
+                                            }}
+                                            disabled={selectedScenarioOption !== null}
+                                            className={`w-full text-left p-3 rounded-xl border text-xs sm:text-sm transition-all duration-150 flex items-center justify-between active:scale-[0.99] ${btnStyle}`}
+                                        >
+                                            <span>{opt}</span>
+                                            {selectedScenarioOption !== null && idx === SCENARIOS_DATA[scenarioIndex].correctIndex && (
+                                                <span className="text-emerald-400 font-bold text-xs ml-2 shrink-0">✓ Correta</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {selectedScenarioOption !== null && (
+                                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-1.5 mb-4 animate-tab-content">
+                                    <p className="text-[10px] font-mono text-amber-400 uppercase font-semibold">ENGLISH EXPLANATION:</p>
+                                    <p className="text-xs text-slate-300 leading-relaxed mb-1.5">{SCENARIOS_DATA[scenarioIndex].explanationEn}</p>
+                                    <p className="text-[10px] font-mono text-emerald-400 uppercase font-semibold">ANÁLISE EM PORTUGUÊS:</p>
+                                    <p className="text-xs text-slate-400 leading-relaxed">{SCENARIOS_DATA[scenarioIndex].explanationPt}</p>
+                                </div>
+                            )}
+
+                            {selectedScenarioOption !== null && (
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedScenarioOption(null);
+                                            if (scenarioIndex < SCENARIOS_DATA.length - 1) setScenarioIndex(i => i + 1);
+                                            else {
+                                                window.AppModal?.alert({type:'success', title:'Cenários concluídos!', message:'Parabéns! Você concluiu todos os cenários práticos da plataforma.'});
+                                                setScenarioIndex(0);
+                                            }
+                                        }}
+                                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-5 py-2 rounded-lg text-xs font-semibold transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                                    >
+                                        {scenarioIndex < SCENARIOS_DATA.length - 1 ? 'Próximo Cenário →' : 'Reiniciar Cenários'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* TAB 4: QUIZ SIMULATOR */}
+                    {activeTab === 'quiz' && (
+                        <div key={`quiz-${quizIndex}`} className="max-w-2xl mx-auto bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl animate-tab-content pb-10">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3 mb-3">
+                                <span className="text-xs font-mono text-amber-400 uppercase tracking-wide font-semibold">
+                                    {QUIZ_QUESTIONS[quizIndex].domain}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-between sm:justify-end">
+                                    <button 
+                                        onClick={() => setIsTimerActive(!isTimerActive)}
+                                        className="text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 active:scale-95 transition-all"
+                                    >
+                                        {isTimerActive ? '⏸️ Pausar' : '▶️ Iniciar'}
+                                    </button>
+                                    <button 
+                                        onClick={() => { setTimer(60); setIsTimerActive(true); }}
+                                        className="text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 active:scale-95 transition-all"
+                                    >
+                                        🔄 60s
+                                    </button>
+                                    <span className={`text-xs font-mono px-2.5 py-1 rounded-full border transition-all ${
+                                        timer < 15 
+                                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 font-bold animate-pulse' 
+                                            : 'bg-slate-950 text-slate-300 border-slate-800'
+                                    }`}>
+                                        ⏱️ {timer}s
+                                    </span>
+                                    <span className="text-xs font-mono text-slate-400 font-semibold bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                                        {quizIndex + 1} / {QUIZ_QUESTIONS.length}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mb-4 border border-slate-800">
+                                <div 
+                                    className={`h-full transition-all duration-1000 linear ${timer < 15 ? 'bg-rose-500' : 'bg-amber-500'}`}
+                                    style={{ width: `${(timer / 60) * 100}%` }}
+                                ></div>
+                            </div>
+
+                            <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed mb-4 bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-slate-800/80">
+                                {QUIZ_QUESTIONS[quizIndex].questionEn}
+                            </p>
+
+                            <div className="space-y-2 mb-4">
+                                {QUIZ_QUESTIONS[quizIndex].options.map((opt, idx) => {
+                                    let btnStyle = "bg-slate-950/80 hover:bg-slate-800 text-slate-200 border-slate-800";
+                                    if (selectedOption !== null) {
+                                        if (idx === QUIZ_QUESTIONS[quizIndex].correctIndex) {
+                                            btnStyle = "bg-emerald-950/80 text-emerald-200 border-emerald-500/80 font-semibold";
+                                        } else if (selectedOption === idx) {
+                                            btnStyle = "bg-rose-950/80 text-rose-200 border-rose-500/80";
+                                        }
+                                    }
+                                    return (
+                                        <button
+                                            key={idx}
+                                            onClick={() => {
+                                                if (selectedOption === null) {
+                                                    setSelectedOption(idx);
+                                                    setIsTimerActive(false);
+                                                    if (idx === QUIZ_QUESTIONS[quizIndex].correctIndex) setScore(s => s + 1);
+                                                }
+                                            }}
+                                            disabled={selectedOption !== null}
+                                            className={`w-full text-left p-3 rounded-xl border text-xs sm:text-sm transition-all duration-150 flex items-center justify-between active:scale-[0.99] ${btnStyle}`}
+                                        >
+                                            <span>{opt}</span>
+                                            {selectedOption !== null && idx === QUIZ_QUESTIONS[quizIndex].correctIndex && (
+                                                <span className="text-emerald-400 font-bold text-xs ml-2 shrink-0">✓ Correto</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {selectedOption !== null && (
+                                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-1.5 mb-4 animate-tab-content">
+                                    <p className="text-[10px] font-mono text-amber-400 uppercase font-semibold">ENGLISH EXPLANATION:</p>
+                                    <p className="text-xs text-slate-300 leading-relaxed mb-1.5">{QUIZ_QUESTIONS[quizIndex].explanationEn}</p>
+                                    <p className="text-[10px] font-mono text-emerald-400 uppercase font-semibold">TRADUÇÃO EXPLICATIVA:</p>
+                                    <p className="text-xs text-slate-400 leading-relaxed">{QUIZ_QUESTIONS[quizIndex].explanationPt}</p>
+                                </div>
+                            )}
+
+                            {selectedOption !== null && (
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedOption(null);
+                                            setTimer(60);
+                                            setIsTimerActive(true);
+                                            if (quizIndex < QUIZ_QUESTIONS.length - 1) setQuizIndex(i => i + 1);
+                                            else {
+                                                window.AppModal?.alert({type:'success', title:'Simulado finalizado!', message:`Pontuação: ${score} / ${QUIZ_QUESTIONS.length}.`});
+                                                setQuizIndex(0);
+                                                setScore(0);
+                                            }
+                                        }}
+                                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-5 py-2 rounded-lg text-xs font-semibold transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                                    >
+                                        {quizIndex < QUIZ_QUESTIONS.length - 1 ? 'Próxima Questão →' : 'Reiniciar Simulador'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    
