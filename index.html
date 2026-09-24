@@ -128,4 +128,734 @@
                 id: "sc3",
                 domain: "04. Prompts & Output (20%)",
                 title: "Cenário de Produção: Garantia de Schema JSON Estrito",
-                scenarioEn: "An application requires Claude to output structured JSON data representing customer risk profiles. When instructed in plain text ('Output JSON only'), Claude occasionally wraps the response in markdown code blocks (` ```json ...
+                scenarioEn: "An application requires Claude to output structured JSON data representing customer risk profiles. When instructed in plain text ('Output JSON only'), Claude occasionally wraps the response in markdown code blocks (` ```json ... ``` `) or adds conversational introductory text, breaking downstream parsers.",
+                question: "Which mechanism guarantees strict structural compliance without parsing failures?",
+                options: [
+                    "A) Asking the user politely in the prompt to avoid markdown.",
+                    "B) Utilizing forced tool calling / structured extraction schema mechanisms to guarantee typed outputs.",
+                    "C) Lowering the temperature to 0.0.",
+                    "D) Using regex replacement on the raw string output."
+                ],
+                correctIndex: 1,
+                explanationEn: "Using tool calling mechanisms or strict structured extraction guarantees that Claude outputs valid objects matching the precise JSON schema.",
+                explanationPt: "O uso de ferramentas estruturadas forçadas garante que a resposta do modelo cumpra o esquema estrito, evitando quebra de parsers por blocos markdown."
+            }
+        ];
+
+        function HelpTooltip({ title, text, position = "top", align = "center" }) {
+            const [open, setOpen] = useState(false);
+            
+            let posClass = position === "bottom" ? "top-full mt-2" : "bottom-full mb-2";
+            let alignClass = "left-1/2 -translate-x-1/2";
+            let arrowAlignClass = "left-1/2 -translate-x-1/2";
+            
+            if (align === "right") {
+                alignClass = "right-0 translate-x-0";
+                arrowAlignClass = "right-2 translate-x-0";
+            } else if (align === "left") {
+                alignClass = "left-0 translate-x-0";
+                arrowAlignClass = "left-2 translate-x-0";
+            }
+
+            const arrowPosClass = position === "bottom"
+                ? `bottom-full border-4 border-transparent border-b-slate-950 ${arrowAlignClass}`
+                : `top-full border-4 border-transparent border-t-slate-950 ${arrowAlignClass}`;
+
+            return (
+                <div className="relative inline-block ml-1 z-50">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+                        onMouseEnter={() => setOpen(true)}
+                        onMouseLeave={() => setOpen(false)}
+                        className="w-4 h-4 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 text-amber-400 text-[10px] font-mono font-bold inline-flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                        aria-label="Ajuda"
+                    >
+                        ?
+                    </button>
+                    {open && (
+                        <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute z-50 w-56 sm:w-64 p-3 bg-slate-950 border border-amber-500/40 rounded-xl shadow-2xl text-left ${posClass} ${alignClass}`}
+                        >
+                            <p className="text-xs font-bold text-amber-400 font-mono mb-1">{title}</p>
+                            <p className="text-[11px] text-slate-300 leading-normal font-sans whitespace-normal">{text}</p>
+                            <div className={`absolute ${arrowPosClass}`}></div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('flashcards');
+            const [selectedDomain, setSelectedDomain] = useState('ALL');
+            const [statusFilter, setStatusFilter] = useState('ALL');
+            const [currentCardIndex, setCurrentCardIndex] = useState(0);
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [cardAnimKey, setCardAnimKey] = useState(0);
+            const [activeInfoDomain, setActiveInfoDomain] = useState(null);
+            
+            const [learnedStatus, setLearnedStatus] = useState(() => {
+                const saved = localStorage.getItem('ccar_learned_status');
+                return saved ? JSON.parse(saved) : {};
+            });
+
+            const [quizIndex, setQuizIndex] = useState(0);
+            const [selectedOption, setSelectedOption] = useState(null);
+            const [score, setScore] = useState(0);
+            const [timer, setTimer] = useState(60);
+            const [isTimerActive, setIsTimerActive] = useState(true);
+
+            // Estados para a aba de Cenários Práticos
+            const [scenarioIndex, setScenarioIndex] = useState(0);
+            const [selectedScenarioOption, setSelectedScenarioOption] = useState(null);
+
+            useEffect(() => {
+                localStorage.setItem('ccar_learned_status', JSON.stringify(learnedStatus));
+            }, [learnedStatus]);
+
+            useEffect(() => {
+                let interval = null;
+                if (activeTab === 'quiz' && isTimerActive && timer > 0 && selectedOption === null) {
+                    interval = setInterval(() => {
+                        setTimer(prevTimer => prevTimer - 1);
+                    }, 1000);
+                } else if (timer === 0 && selectedOption === null) {
+                    setSelectedOption(-1);
+                }
+                return () => clearInterval(interval);
+            }, [activeTab, isTimerActive, timer, selectedOption]);
+
+            const speakText = useCallback((text) => {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.9;
+                    window.speechSynthesis.speak(utterance);
+                }
+            }, []);
+
+            const setStatus = (id, status) => {
+                setLearnedStatus(prev => ({ ...prev, [id]: status }));
+            };
+
+            const resetProgress = () => {
+                if (window.confirm("Tem certeza que deseja zerar todo o seu progresso de estudos?")) {
+                    setLearnedStatus({});
+                    localStorage.removeItem('ccar_learned_status');
+                }
+            };
+
+            const filteredVocab = VOCAB_DATA.filter(item => {
+                const matchesDomain = selectedDomain === 'ALL' || item.domainId === selectedDomain;
+                const matchesStatus = statusFilter === 'ALL' || (learnedStatus[item.id] || 'unlearned') === statusFilter;
+                return matchesDomain && matchesStatus;
+            });
+
+            const currentCard = filteredVocab[currentCardIndex] || filteredVocab[0];
+
+            const handleNextCard = useCallback(() => {
+                setIsFlipped(false);
+                setCardAnimKey(prev => prev + 1);
+                setTimeout(() => {
+                    setCurrentCardIndex((prev) => (prev + 1) % (filteredVocab.length || 1));
+                }, 50);
+            }, [filteredVocab.length]);
+
+            const handlePrevCard = useCallback(() => {
+                setIsFlipped(false);
+                setCardAnimKey(prev => prev + 1);
+                setTimeout(() => {
+                    setCurrentCardIndex((prev) => (prev - 1 + filteredVocab.length) % (filteredVocab.length || 1));
+                }, 50);
+            }, [filteredVocab.length]);
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (activeTab !== 'flashcards') return;
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        setIsFlipped(f => !f);
+                    } else if (e.code === 'ArrowRight') {
+                        handleNextCard();
+                    } else if (e.code === 'ArrowLeft') {
+                        handlePrevCard();
+                    } else if (e.code === 'KeyA' && currentCard) {
+                        speakText(currentCard.term);
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [activeTab, handleNextCard, handlePrevCard, speakText, currentCard]);
+
+            const easyCount = Object.values(learnedStatus).filter(v => v === 'easy').length;
+            const progressPct = Math.round((easyCount / VOCAB_DATA.length) * 100);
+
+            const domainInfos = {
+                'ALL': 'Exibe todos os 30 módulos dos 5 domínios da prova.',
+                'd1': 'Domínio 1 (27% da prova): Agentic Loops, Multi-agent, Subagents, Session state.',
+                'd2': 'Domínio 2 (18% da prova): Tool Design, MCP Primitives, Grep vs Glob, Error payloads.',
+                'd3': 'Domínio 3 (20% da prova): CLAUDE.md, Custom Slash Commands, Plan Mode, CI/CD.',
+                'd4': 'Domínio 4 (20% da prova): Categorical Explicit Criteria, Few-shot, Batches API.',
+                'd5': 'Domínio 5 (15% da prova): Context Truncation, Ambiguity Escalation, Stratified Sampling.'
+            };
+
+            return (
+                <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-6">
+                    <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/80">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide">
+                                    ANTHROPIC CCAR-F
+                                </span>
+                                <span className="text-slate-400 text-xs font-mono">3-Month Accelerated Prep</span>
+                                <HelpTooltip 
+                                    title="Metodologia com Pesos Oficiais" 
+                                    text="Este sistema treina a leitura técnica alinhada estritamente aos percentuais de cobrança da certificação oficial Anthropic Claude Architect." 
+                                    position="bottom"
+                                    align="left"
+                                />
+                            </div>
+                            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
+                                Inglês Técnico para Certificação
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] sm:text-xs font-mono text-slate-300 flex items-center gap-1.5">
+                                <span>📊 Dominados: <span className="text-emerald-400 font-bold">{progressPct}%</span> ({easyCount}/30)</span>
+                                <HelpTooltip 
+                                    title="Progresso de Retenção" 
+                                    text="Calculado com base nos termos marcados como 'Dominado' após a revisão ativa." 
+                                    position="bottom"
+                                    align="right"
+                                />
+                            </div>
+                            <button
+                                onClick={resetProgress}
+                                className="bg-slate-900 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/50 px-2 py-1 rounded-lg text-xs font-mono transition-all active:scale-95"
+                                title="Zerar todo o progresso de estudos"
+                            >
+                                🗑️ Reset
+                            </button>
+                            <a 
+                                href="https://claudecertificationguide.com/learn" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 active:scale-95"
+                            >
+                                <span>Guia</span>
+                                <span className="text-amber-400 text-xs">↗</span>
+                            </a>
+                        </div>
+                    </header>
+
+                    <div className="mb-2">
+                        <div className="overflow-x-auto no-scrollbar pb-1">
+                            <div className="flex items-center gap-2 w-max md:w-full md:grid md:grid-cols-6">
+                                {[
+                                    { id: 'ALL', label: '🌐 Todos' },
+                                    { id: 'd1', label: '📇 01. Arch (27%)' },
+                                    { id: 'd2', label: '🛠️ 02. Tools (18%)' },
+                                    { id: 'd3', label: '💻 03. Code (20%)' },
+                                    { id: 'd4', label: '🎨 04. Prompts (20%)' },
+                                    { id: 'd5', label: '⚡ 05. Context (15%)' }
+                                ].map(d => (
+                                    <div key={d.id} className="flex items-center">
+                                        <button 
+                                            onClick={() => { setSelectedDomain(d.id); setCurrentCardIndex(0); setIsFlipped(false); }}
+                                            className={`w-full px-3 py-1.5 sm:py-2 rounded-lg text-xs font-medium transition-all duration-200 text-center truncate flex items-center justify-between gap-1 active:scale-95 ${
+                                                selectedDomain === d.id 
+                                                    ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
+                                                    : 'bg-slate-900/90 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
+                                            }`}
+                                        >
+                                            <span className="truncate">{d.label}</span>
+                                            <span 
+                                                onClick={(e) => { e.stopPropagation(); setActiveInfoDomain(activeInfoDomain === d.id ? null : d.id); }}
+                                                className="w-4 h-4 rounded-full bg-slate-950/40 hover:bg-slate-950/80 text-[10px] font-mono inline-flex items-center justify-center shrink-0"
+                                                title={domainInfos[d.id]}
+                                            >
+                                                ?
+                                            </span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {activeInfoDomain && (
+                            <div className="mt-2 p-2.5 bg-slate-900/90 border border-amber-500/30 rounded-lg text-xs text-slate-300 flex items-center justify-between font-mono animate-tab-content">
+                                <div>
+                                    <span className="text-amber-400 font-bold mr-2">ℹ️ Sobre o Domínio:</span>
+                                    {domainInfos[activeInfoDomain]}
+                                </div>
+                                <button 
+                                    onClick={() => setActiveInfoDomain(null)}
+                                    className="text-slate-500 hover:text-slate-300 ml-2"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4 mt-3">
+                        <div className="flex flex-wrap gap-1.5 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80">
+                            <button
+                                onClick={() => setActiveTab('flashcards')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'flashcards'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>🎴 Flashcards</span>
+                                <span className="text-[10px] bg-slate-950/40 px-1 py-0.2 rounded font-mono">{filteredVocab.length}</span>
+                                <HelpTooltip title="Aba Flashcards" text="Modo de Estudo Ativo. Veja o conceito técnico em inglês e clique para validar a tradução." align="left" />
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('dictionary')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'dictionary'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>📖 Dicionário</span>
+                                <HelpTooltip title="Aba Dicionário" text="Visão geral em lista de todos os termos técnicos." align="center" />
+                            </button>
+                            <button
+                                onClick={() => { 
+                                    setActiveTab('scenarios'); 
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'scenarios'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>🏢 Cenários Práticos</span>
+                                <span className="text-[10px] bg-slate-950/40 px-1 py-0.2 rounded font-mono">{SCENARIOS_DATA.length}</span>
+                                <HelpTooltip title="Cenários de Arquitetura" text="Questões práticas baseadas em incidentes de produção exigidas no exame oficial." align="center" />
+                            </button>
+                            <button
+                                onClick={() => { 
+                                    setActiveTab('quiz'); 
+                                    setTimer(60); 
+                                    setIsTimerActive(true); 
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
+                                    activeTab === 'quiz'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                                }`}
+                            >
+                                <span>⏱️ Simulador</span>
+                                <HelpTooltip title="Simulador Speed Mode" text="Questões no formato oficial com cronómetro de 60 segundos." align="right" />
+                            </button>
+                        </div>
+
+                        {activeTab === 'flashcards' && (
+                            <div className="flex items-center gap-1 bg-slate-900/60 p-1 rounded-lg border border-slate-800/80 text-[11px] font-mono">
+                                <span className="text-slate-500 px-1.5 hidden sm:inline">Filtrar:</span>
+                                <button 
+                                    onClick={() => { setStatusFilter('ALL'); setCurrentCardIndex(0); }}
+                                    className={`px-2 py-0.5 rounded transition-all ${statusFilter === 'ALL' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    Todos
+                                </button>
+                                <button 
+                                    onClick={() => { setStatusFilter('hard'); setCurrentCardIndex(0); }}
+                                    className={`px-2 py-0.5 rounded transition-all ${statusFilter === 'hard' ? 'bg-rose-950 text-rose-300 font-bold border border-rose-800/50' : 'text-slate-400 hover:text-rose-400'}`}
+                                >
+                                    ❌ Erros
+                                </button>
+                                <button 
+                                    onClick={() => { setStatusFilter('review'); setCurrentCardIndex(0); }}
+                                    className={`px-2 py-0.5 rounded transition-all ${statusFilter === 'review' ? 'bg-amber-950 text-amber-300 font-bold border border-amber-800/50' : 'text-slate-400 hover:text-amber-400'}`}
+                                >
+                                    ⚠️ Difíceis
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* TAB 1: FLASHCARDS */}
+                    {activeTab === 'flashcards' && (
+                        <div key={`flashcards-${selectedDomain}-${statusFilter}`} className="max-w-xl mx-auto animate-tab-content pb-10">
+                            {filteredVocab.length === 0 ? (
+                                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 font-mono">
+                                    <p className="text-lg mb-2">🎉 Nenhum cartão nesta categoria!</p>
+                                    <p className="text-xs text-slate-500">Você não possui cartões salvos sob o filtro selecionado.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-center text-xs font-mono text-slate-400 mb-2 px-1">
+                                        <span>Termo {currentCardIndex + 1} de {filteredVocab.length}</span>
+                                        <span className="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50 text-[11px]">
+                                            Módulo {currentCard.moduleNum}
+                                        </span>
+                                    </div>
+
+                                    <div 
+                                        key={cardAnimKey}
+                                        onClick={() => setIsFlipped(!isFlipped)}
+                                        className={`card-flip cursor-pointer w-full relative animate-card-next ${isFlipped ? 'flipped' : ''}`}
+                                    >
+                                        <div className="card-inner w-full">
+                                            {/* FRONT */}
+                                            <div className="card-front bg-gradient-to-b from-slate-900 to-slate-900/95 border border-slate-800 rounded-2xl p-4 sm:p-6 flex flex-col justify-between shadow-xl">
+                                                <div>
+                                                    <div className="flex items-center justify-between text-[11px] font-mono text-amber-400/90 mb-2.5">
+                                                        <span className="bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30 font-semibold truncate max-w-[220px] sm:max-w-[280px]">
+                                                            {currentCard.domainName}
+                                                        </span>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); speakText(currentCard.term); }}
+                                                            className="p-1 bg-slate-800 hover:bg-slate-700 rounded-md text-amber-400 transition-all flex items-center gap-1 shrink-0 active:scale-95"
+                                                            title="Ouvir Pronúncia"
+                                                        >
+                                                            🔊 <span className="text-[10px]">Ouvir</span>
+                                                        </button>
+                                                    </div>
+                                                    <h2 className="text-lg sm:text-2xl font-bold text-white font-mono tracking-tight mb-0.5">
+                                                        {currentCard.term}
+                                                    </h2>
+                                                    <p className="text-[11px] font-mono text-slate-400 mb-3">{currentCard.phonetic}</p>
+                                                    
+                                                    <div className="bg-slate-950/80 p-3 sm:p-3.5 rounded-xl border border-slate-800/80 relative">
+                                                        <div className="flex justify-between items-center mb-0.5">
+                                                            <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">ENGLISH TECHNICAL DEFINITION:</p>
+                                                            <HelpTooltip title="Definição em Inglês" text="A definição técnica exatamente como aparece nos manuais oficiais da Anthropic." align="right" />
+                                                        </div>
+                                                        <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
+                                                            "{currentCard.definition}"
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 flex justify-between items-center text-xs text-slate-500 font-mono border-t border-slate-800/80 pt-2.5">
+                                                    <span>Toque para ver a resposta</span>
+                                                    <span className="text-amber-400">Ver resposta →</span>
+                                                </div>
+                                            </div>
+
+                                            {/* BACK - Flex Layout Rígido */}
+                                            <div className="card-back absolute top-0 left-0 w-full h-full bg-slate-900 border border-amber-500/30 rounded-2xl p-3 sm:p-5 flex flex-col justify-between shadow-xl">
+                                                <div className="space-y-1.5 sm:space-y-2">
+                                                    <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400">
+                                                        <span className="bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">
+                                                            TRADUÇÃO & APLICAÇÃO
+                                                        </span>
+                                                        <span className="text-slate-400">Voltar 🔄</span>
+                                                    </div>
+                                                    <h3 className="text-sm sm:text-lg font-bold text-emerald-300 leading-tight">
+                                                        {currentCard.ptTranslation}
+                                                    </h3>
+
+                                                    <div className="bg-slate-950/90 p-2 sm:p-2.5 rounded-lg border border-slate-800">
+                                                        <p className="text-[9px] sm:text-[10px] font-mono text-amber-400 uppercase tracking-wider mb-0.5">EXEMPLO EM INGLÊS:</p>
+                                                        <p className="text-[10px] sm:text-xs font-mono text-slate-300 italic line-clamp-2">
+                                                            "{currentCard.example}"
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="bg-slate-950/90 p-2 sm:p-2.5 rounded-lg border border-slate-800 relative">
+                                                        <div className="flex justify-between items-center mb-0.5">
+                                                            <p className="text-[9px] sm:text-[10px] font-mono text-slate-400 uppercase tracking-wider">EXAM TRAP / CONTEXTO:</p>
+                                                            <HelpTooltip title="Exam Trap (Pegadinha de Prova)" text="O ponto exato onde a banca da certificação tenta confundir os candidatos com termos parecidos." align="right" />
+                                                        </div>
+                                                        <p className="text-[10px] sm:text-xs text-slate-300 leading-snug line-clamp-2">
+                                                            {currentCard.keyContext}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-2 border-t border-slate-800/80" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center gap-1.5 w-full">
+                                                        <button 
+                                                            onClick={() => setStatus(currentCard.id, 'hard')}
+                                                            className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+                                                                learnedStatus[currentCard.id] === 'hard'
+                                                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500'
+                                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-rose-400'
+                                                            }`}
+                                                        >
+                                                            ❌ Errei
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setStatus(currentCard.id, 'review')}
+                                                            className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+                                                                learnedStatus[currentCard.id] === 'review'
+                                                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500'
+                                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-amber-400'
+                                                            }`}
+                                                        >
+                                                            ⚠️ Difícil
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setStatus(currentCard.id, 'easy')}
+                                                            className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold border transition-all active:scale-95 ${
+                                                                learnedStatus[currentCard.id] === 'easy'
+                                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500'
+                                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-emerald-400'
+                                                            }`}
+                                                        >
+                                                            ✅ Dominado
+                                                        </button>
+                                                        <HelpTooltip title="Classificação Leitner" text="Classifique para priorizar os cartões." align="right" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between mt-4">
+                                        <button 
+                                            onClick={handlePrevCard}
+                                            className="px-4 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/80 rounded-lg text-xs font-medium transition-all active:scale-95"
+                                        >
+                                            ← Anterior
+                                        </button>
+                                        <button 
+                                            onClick={handleNextCard}
+                                            className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg text-xs transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                                        >
+                                            Próximo →
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* TAB 2: DICTIONARY */}
+                    {activeTab === 'dictionary' && (
+                        <div key="dictionary" className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-tab-content pb-10">
+                            {VOCAB_DATA.map((item) => (
+                                <div key={item.id} className="bg-slate-900/80 border border-slate-800/80 p-4 rounded-xl flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-mono bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30">
+                                                Módulo {item.moduleNum}
+                                            </span>
+                                            <button 
+                                                onClick={() => speakText(item.term)}
+                                                className="text-[10px] font-mono text-slate-400 hover:text-amber-400 active:scale-95 transition-transform"
+                                            >
+                                                🔊 Pronúncia
+                                            </button>
+                                        </div>
+                                        <h3 className="text-base font-bold text-white font-mono">{item.term}</h3>
+                                        <p className="text-xs text-emerald-400 font-medium mb-2">{item.ptTranslation}</p>
+                                        <p className="text-xs text-slate-300 leading-relaxed mb-3">{item.definition}</p>
+                                    </div>
+                                    <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/80 text-xs font-mono text-slate-400">
+                                        <span className="text-amber-400 font-semibold block text-[10px] mb-0.5 uppercase">Exemplo:</span>
+                                        "{item.example}"
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* TAB 3: SCENARIOS-BASED QUESTIONS */}
+                    {activeTab === 'scenarios' && (
+                        <div key={`scenarios-${scenarioIndex}`} className="max-w-2xl mx-auto bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl animate-tab-content pb-10">
+                            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3">
+                                <span className="text-xs font-mono text-amber-400 uppercase tracking-wide font-semibold">
+                                    {SCENARIOS_DATA[scenarioIndex].domain}
+                                </span>
+                                <span className="text-xs font-mono text-slate-400 font-semibold bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                                    Caso {scenarioIndex + 1} / {SCENARIOS_DATA.length}
+                                </span>
+                            </div>
+
+                            <h3 className="text-base font-bold text-white mb-2 font-mono">
+                                {SCENARIOS_DATA[scenarioIndex].title}
+                            </h3>
+
+                            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4 bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/80 italic">
+                                "{SCENARIOS_DATA[scenarioIndex].scenarioEn}"
+                            </p>
+
+                            <p className="text-xs sm:text-sm font-semibold text-amber-300 mb-3">
+                                {SCENARIOS_DATA[scenarioIndex].question}
+                            </p>
+
+                            <div className="space-y-2 mb-4">
+                                {SCENARIOS_DATA[scenarioIndex].options.map((opt, idx) => {
+                                    let btnStyle = "bg-slate-950/80 hover:bg-slate-800 text-slate-200 border-slate-800";
+                                    if (selectedScenarioOption !== null) {
+                                        if (idx === SCENARIOS_DATA[scenarioIndex].correctIndex) {
+                                            btnStyle = "bg-emerald-950/80 text-emerald-200 border-emerald-500/80 font-semibold";
+                                        } else if (selectedScenarioOption === idx) {
+                                            btnStyle = "bg-rose-950/80 text-rose-200 border-rose-500/80";
+                                        }
+                                    }
+                                    return (
+                                        <button
+                                            key={idx}
+                                            onClick={() => {
+                                                if (selectedScenarioOption === null) {
+                                                    setSelectedScenarioOption(idx);
+                                                }
+                                            }}
+                                            disabled={selectedScenarioOption !== null}
+                                            className={`w-full text-left p-3 rounded-xl border text-xs sm:text-sm transition-all duration-150 flex items-center justify-between active:scale-[0.99] ${btnStyle}`}
+                                        >
+                                            <span>{opt}</span>
+                                            {selectedScenarioOption !== null && idx === SCENARIOS_DATA[scenarioIndex].correctIndex && (
+                                                <span className="text-emerald-400 font-bold text-xs ml-2 shrink-0">✓ Correta</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {selectedScenarioOption !== null && (
+                                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-1.5 mb-4 animate-tab-content">
+                                    <p className="text-[10px] font-mono text-amber-400 uppercase font-semibold">ENGLISH EXPLANATION:</p>
+                                    <p className="text-xs text-slate-300 leading-relaxed mb-1.5">{SCENARIOS_DATA[scenarioIndex].explanationEn}</p>
+                                    <p className="text-[10px] font-mono text-emerald-400 uppercase font-semibold">ANÁLISE EM PORTUGUÊS:</p>
+                                    <p className="text-xs text-slate-400 leading-relaxed">{SCENARIOS_DATA[scenarioIndex].explanationPt}</p>
+                                </div>
+                            )}
+
+                            {selectedScenarioOption !== null && (
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedScenarioOption(null);
+                                            if (scenarioIndex < SCENARIOS_DATA.length - 1) setScenarioIndex(i => i + 1);
+                                            else {
+                                                alert("Parabéns! Você concluiu todos os cenários práticos de arquitetura.");
+                                                setScenarioIndex(0);
+                                            }
+                                        }}
+                                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-5 py-2 rounded-lg text-xs font-semibold transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                                    >
+                                        {scenarioIndex < SCENARIOS_DATA.length - 1 ? 'Próximo Cenário →' : 'Reiniciar Cenários'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* TAB 4: QUIZ SIMULATOR */}
+                    {activeTab === 'quiz' && (
+                        <div key={`quiz-${quizIndex}`} className="max-w-2xl mx-auto bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl animate-tab-content pb-10">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3 mb-3">
+                                <span className="text-xs font-mono text-amber-400 uppercase tracking-wide font-semibold">
+                                    {QUIZ_QUESTIONS[quizIndex].domain}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-between sm:justify-end">
+                                    <button 
+                                        onClick={() => setIsTimerActive(!isTimerActive)}
+                                        className="text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 active:scale-95 transition-all"
+                                    >
+                                        {isTimerActive ? '⏸️ Pausar' : '▶️ Iniciar'}
+                                    </button>
+                                    <button 
+                                        onClick={() => { setTimer(60); setIsTimerActive(true); }}
+                                        className="text-[10px] font-mono bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 active:scale-95 transition-all"
+                                    >
+                                        🔄 60s
+                                    </button>
+                                    <span className={`text-xs font-mono px-2.5 py-1 rounded-full border transition-all ${
+                                        timer < 15 
+                                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 font-bold animate-pulse' 
+                                            : 'bg-slate-950 text-slate-300 border-slate-800'
+                                    }`}>
+                                        ⏱️ {timer}s
+                                    </span>
+                                    <span className="text-xs font-mono text-slate-400 font-semibold bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                                        {quizIndex + 1} / {QUIZ_QUESTIONS.length}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mb-4 border border-slate-800">
+                                <div 
+                                    className={`h-full transition-all duration-1000 linear ${timer < 15 ? 'bg-rose-500' : 'bg-amber-500'}`}
+                                    style={{ width: `${(timer / 60) * 100}%` }}
+                                ></div>
+                            </div>
+
+                            <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed mb-4 bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-slate-800/80">
+                                {QUIZ_QUESTIONS[quizIndex].questionEn}
+                            </p>
+
+                            <div className="space-y-2 mb-4">
+                                {QUIZ_QUESTIONS[quizIndex].options.map((opt, idx) => {
+                                    let btnStyle = "bg-slate-950/80 hover:bg-slate-800 text-slate-200 border-slate-800";
+                                    if (selectedOption !== null) {
+                                        if (idx === QUIZ_QUESTIONS[quizIndex].correctIndex) {
+                                            btnStyle = "bg-emerald-950/80 text-emerald-200 border-emerald-500/80 font-semibold";
+                                        } else if (selectedOption === idx) {
+                                            btnStyle = "bg-rose-950/80 text-rose-200 border-rose-500/80";
+                                        }
+                                    }
+                                    return (
+                                        <button
+                                            key={idx}
+                                            onClick={() => {
+                                                if (selectedOption === null) {
+                                                    setSelectedOption(idx);
+                                                    setIsTimerActive(false);
+                                                    if (idx === QUIZ_QUESTIONS[quizIndex].correctIndex) setScore(s => s + 1);
+                                                }
+                                            }}
+                                            disabled={selectedOption !== null}
+                                            className={`w-full text-left p-3 rounded-xl border text-xs sm:text-sm transition-all duration-150 flex items-center justify-between active:scale-[0.99] ${btnStyle}`}
+                                        >
+                                            <span>{opt}</span>
+                                            {selectedOption !== null && idx === QUIZ_QUESTIONS[quizIndex].correctIndex && (
+                                                <span className="text-emerald-400 font-bold text-xs ml-2 shrink-0">✓ Correto</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {selectedOption !== null && (
+                                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-1.5 mb-4 animate-tab-content">
+                                    <p className="text-[10px] font-mono text-amber-400 uppercase font-semibold">ENGLISH EXPLANATION:</p>
+                                    <p className="text-xs text-slate-300 leading-relaxed mb-1.5">{QUIZ_QUESTIONS[quizIndex].explanationEn}</p>
+                                    <p className="text-[10px] font-mono text-emerald-400 uppercase font-semibold">TRADUÇÃO EXPLICATIVA:</p>
+                                    <p className="text-xs text-slate-400 leading-relaxed">{QUIZ_QUESTIONS[quizIndex].explanationPt}</p>
+                                </div>
+                            )}
+
+                            {selectedOption !== null && (
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedOption(null);
+                                            setTimer(60);
+                                            setIsTimerActive(true);
+                                            if (quizIndex < QUIZ_QUESTIONS.length - 1) setQuizIndex(i => i + 1);
+                                            else {
+                                                alert(`Simulado finalizado! Pontuação: ${score} / ${QUIZ_QUESTIONS.length}`);
+                                                setQuizIndex(0);
+                                                setScore(0);
+                                            }
+                                        }}
+                                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-5 py-2 rounded-lg text-xs font-semibold transition-all shadow-md shadow-amber-500/20 active:scale-95"
+                                    >
+                                        {quizIndex < QUIZ_QUESTIONS.length - 1 ? 'Próxima Questão →' : 'Reiniciar Simulador'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
