@@ -196,6 +196,9 @@
             const [cardAnimKey, setCardAnimKey] = useState(0);
             const [activeInfoDomain, setActiveInfoDomain] = useState(null);
             
+            // Estado para o Modal / Guia de Instruções na Aplicação
+            const [isGuideOpen, setIsGuideOpen] = useState(false);
+            
             const [learnedStatus, setLearnedStatus] = useState(() => {
                 const saved = localStorage.getItem('ccar_learned_status');
                 return saved ? JSON.parse(saved) : {};
@@ -207,7 +210,6 @@
             const [timer, setTimer] = useState(60);
             const [isTimerActive, setIsTimerActive] = useState(true);
 
-            // Estados para a aba de Cenários Práticos
             const [scenarioIndex, setScenarioIndex] = useState(0);
             const [selectedScenarioOption, setSelectedScenarioOption] = useState(null);
 
@@ -303,7 +305,65 @@
             };
 
             return (
-                <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-6">
+                <div className="max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-6 relative">
+                    {/* MODAL DO GUIA INTERATIVO */}
+                    {isGuideOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/80 backdrop-blur-sm animate-tab-content">
+                            <div className="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xl">💡</span>
+                                        <h3 className="text-base sm:text-lg font-bold text-white font-mono">Guia Oficial de Funcionalidades</h3>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsGuideOpen(false)}
+                                        className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 w-7 h-7 rounded-lg font-mono flex items-center justify-center transition-all"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4 text-xs sm:text-sm text-slate-300">
+                                    <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🎴</span> 1. Flashcards & Dicionário (Leitner System)
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Estude os termos essenciais em inglês técnico. Classifique os cartões como <strong className="text-emerald-400">Dominado</strong>, <strong className="text-amber-400">Difícil</strong> ou <strong className="text-rose-400">Errei</strong> para acompanhar sua retenção no indicador do topo.
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>🏢</span> 2. Cenários Práticos de Arquitetura
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Simula incidentes reais de produção focados nos exames da Anthropic (como estouro de contexto em subagentes e tratamento de falhas em ferramentas). Leia o caso em inglês e verifique a análise técnica detalhada.
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                                        <h4 className="font-bold text-amber-400 font-mono mb-1 flex items-center gap-1.5">
+                                            <span>⏱️</span> 3. Simulador Speed Mode
+                                        </h4>
+                                        <p className="text-slate-300 leading-relaxed">
+                                            Desafie-se com questões oficiais cronometradas a 60 segundos por pergunta. Desenvolve a agilidade de leitura técnica sob pressão exigida na certificação CCAR-F.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 pt-3 border-t border-slate-800 flex justify-end">
+                                    <button
+                                        onClick={() => setIsGuideOpen(false)}
+                                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95"
+                                    >
+                                        Entendido, Vamos Estudar!
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/80">
                         <div>
                             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -323,14 +383,15 @@
                             </h1>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={() => setIsGuideOpen(true)}
+                                className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all flex items-center gap-1 active:scale-95"
+                                title="Abrir Guia de Utilização"
+                            >
+                                <span>📖 Como Usar</span>
+                            </button>
                             <div className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-[11px] sm:text-xs font-mono text-slate-300 flex items-center gap-1.5">
                                 <span>📊 Dominados: <span className="text-emerald-400 font-bold">{progressPct}%</span> ({easyCount}/30)</span>
-                                <HelpTooltip 
-                                    title="Progresso de Retenção" 
-                                    text="Calculado com base nos termos marcados como 'Dominado' após a revisão ativa." 
-                                    position="bottom"
-                                    align="right"
-                                />
                             </div>
                             <button
                                 onClick={resetProgress}
@@ -345,7 +406,7 @@
                                 rel="noreferrer"
                                 className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1 active:scale-95"
                             >
-                                <span>Guia</span>
+                                <span>Guia Oficial</span>
                                 <span className="text-amber-400 text-xs">↗</span>
                             </a>
                         </div>
@@ -413,7 +474,6 @@
                             >
                                 <span>🎴 Flashcards</span>
                                 <span className="text-[10px] bg-slate-950/40 px-1 py-0.2 rounded font-mono">{filteredVocab.length}</span>
-                                <HelpTooltip title="Aba Flashcards" text="Modo de Estudo Ativo. Veja o conceito técnico em inglês e clique para validar a tradução." align="left" />
                             </button>
                             <button
                                 onClick={() => setActiveTab('dictionary')}
@@ -424,12 +484,9 @@
                                 }`}
                             >
                                 <span>📖 Dicionário</span>
-                                <HelpTooltip title="Aba Dicionário" text="Visão geral em lista de todos os termos técnicos." align="center" />
                             </button>
                             <button
-                                onClick={() => { 
-                                    setActiveTab('scenarios'); 
-                                }}
+                                onClick={() => { setActiveTab('scenarios'); }}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex items-center gap-1.5 active:scale-95 ${
                                     activeTab === 'scenarios'
                                         ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
@@ -438,7 +495,6 @@
                             >
                                 <span>🏢 Cenários Práticos</span>
                                 <span className="text-[10px] bg-slate-950/40 px-1 py-0.2 rounded font-mono">{SCENARIOS_DATA.length}</span>
-                                <HelpTooltip title="Cenários de Arquitetura" text="Questões práticas baseadas em incidentes de produção exigidas no exame oficial." align="center" />
                             </button>
                             <button
                                 onClick={() => { 
@@ -453,7 +509,6 @@
                                 }`}
                             >
                                 <span>⏱️ Simulador</span>
-                                <HelpTooltip title="Simulador Speed Mode" text="Questões no formato oficial com cronómetro de 60 segundos." align="right" />
                             </button>
                         </div>
 
@@ -542,7 +597,7 @@
                                                 </div>
                                             </div>
 
-                                            {/* BACK - Flex Layout Rígido */}
+                                            {/* BACK */}
                                             <div className="card-back absolute top-0 left-0 w-full h-full bg-slate-900 border border-amber-500/30 rounded-2xl p-3 sm:p-5 flex flex-col justify-between shadow-xl">
                                                 <div className="space-y-1.5 sm:space-y-2">
                                                     <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400">
